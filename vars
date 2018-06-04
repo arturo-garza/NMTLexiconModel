@@ -1,0 +1,5 @@
+src=en
+trg=de
+export data_dir=/Users/arturogarza/Documents/NMTLexiconModel/data
+export main_dir=/Users/arturogarza/Documents/NMTLexiconModel
+export nematus_home=/Users/arturogarza/Documents/NMTLexiconModel/nematus
