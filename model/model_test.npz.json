@@ -4,8 +4,8 @@
   "beam_size": 12, 
   "clip_c": 1, 
   "datasets": [
-    "/Users/arturogarza/Documents/NMTLexiconModel/ted_data/ted-corpus.bpe.en", 
-    "/Users/arturogarza/Documents/NMTLexiconModel/ted_data/ted-corpus.bpe.de"
+    "/Users/arturogarza/Documents/NMTLexiconModel/data/test/corpus.en", 
+    "/Users/arturogarza/Documents/NMTLexiconModel/data/test/corpus.de"
   ], 
   "dec_base_recurrence_transition_depth": 2, 
   "dec_deep_context": false, 
@@ -13,13 +13,13 @@
   "dec_high_recurrence_transition_depth": 1, 
   "decay_c": 0, 
   "dictionaries": [
-    "/Users/arturogarza/Documents/NMTLexiconModel/ted_data/ted-corpus.bpe.en.json", 
-    "/Users/arturogarza/Documents/NMTLexiconModel/ted_data/ted-corpus.bpe.de.json"
+    "/Users/arturogarza/Documents/NMTLexiconModel/data/test/vocab.en.json", 
+    "/Users/arturogarza/Documents/NMTLexiconModel/data/test/vocab.de.json"
   ], 
   "dim_per_factor": [
     512
   ], 
-  "dispFreq": 1000, 
+  "dispFreq": 5, 
   "dropout_embedding": 0.2, 
   "dropout_hidden": 0.2, 
   "dropout_source": 0, 
@@ -31,9 +31,9 @@
   "finish_after": 10000000, 
   "keep_train_set_in_memory": false, 
   "learning_rate": 0.0001, 
-  "lexicon": "True", 
+  "lexicon": "False", 
   "map_decay_c": 0, 
-  "max_epochs": 5000, 
+  "max_epochs": 8, 
   "maxibatch_size": 20, 
   "maxlen": 50, 
   "model_version": 0.2, 
@@ -47,31 +47,31 @@
   "reload": null, 
   "reload_training_progress": true, 
   "run_validation": false, 
-  "sampleFreq": 10000, 
-  "saveFreq": 30000, 
-  "saveto": "/Users/arturogarza/Documents/NMTLexiconModel/model/model.npz", 
+  "sampleFreq": 50, 
+  "saveFreq": 50, 
+  "saveto": "/Users/arturogarza/Documents/NMTLexiconModel/model/model_test.npz", 
   "shuffle_each_epoch": true, 
   "sort_by_length": true, 
-  "source_dataset": "/Users/arturogarza/Documents/NMTLexiconModel/ted_data/ted-corpus.bpe.en", 
+  "source_dataset": "/Users/arturogarza/Documents/NMTLexiconModel/data/test/corpus.en", 
   "source_dicts": [
-    "/Users/arturogarza/Documents/NMTLexiconModel/ted_data/ted-corpus.bpe.en.json"
+    "/Users/arturogarza/Documents/NMTLexiconModel/data/test/vocab.en.json"
   ], 
   "source_vocab_sizes": [
-    3626
+    31915
   ], 
   "state_size": 1024, 
   "summaryFreq": 0, 
   "summary_dir": null, 
-  "target_dataset": "/Users/arturogarza/Documents/NMTLexiconModel/ted_data/ted-corpus.bpe.de", 
-  "target_dict": "/Users/arturogarza/Documents/NMTLexiconModel/ted_data/ted-corpus.bpe.de.json", 
-  "target_vocab_size": 3824, 
+  "target_dataset": "/Users/arturogarza/Documents/NMTLexiconModel/data/test/corpus.de", 
+  "target_dict": "/Users/arturogarza/Documents/NMTLexiconModel/data/test/vocab.de.json", 
+  "target_vocab_size": 32027, 
   "tie_decoder_embeddings": true, 
   "token_batch_size": 0, 
   "translate_valid": false, 
   "translation_maxlen": 200, 
   "use_dropout": false, 
   "use_layer_norm": true, 
-  "validFreq": 10000, 
+  "validFreq": 50, 
   "valid_batch_size": 32, 
   "valid_datasets": [
     "/Users/arturogarza/Documents/NMTLexiconModel/data/newstest2013.bpe.en", 
