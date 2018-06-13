@@ -5,7 +5,7 @@
 #. $main_dir/run_scripts/vars #Source and destination language
 #--datasets $main_dir/ted_data/ted-corpus.bpe.$src $main_dir/ted_data/ted-corpus.bpe.$trg \ --dictionaries $main_dir/ted_data/ted-corpus.bpe.$src.json $main_dir/ted_data/ted-corpus.bpe.$trg.json \
 
-python2 $nematus_home/nematus/nmt.py \
+python $nematus_home/nematus/nmt.py \
 --model $main_dir/model/model_test.npz \
 --datasets $main_dir/data/test/corpus.$src $main_dir/data/test/corpus.$trg \
 --valid_datasets $data_dir/newstest2013.bpe.$src $data_dir/newstest2013.bpe.$trg \
@@ -23,4 +23,7 @@ python2 $nematus_home/nematus/nmt.py \
 --sampleFreq 1000 \
 --tie_decoder_embeddings \
 --layer_normalisation \
---lexicon True
+--lexical True
+
+
+#This is a test of a change
