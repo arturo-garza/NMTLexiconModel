@@ -23,7 +23,4 @@ python $nematus_home/nematus/nmt.py \
 --sampleFreq 1000 \
 --tie_decoder_embeddings \
 --layer_normalisation \
---lexical True
-
-
-#This is a test of a change
+--lexical
