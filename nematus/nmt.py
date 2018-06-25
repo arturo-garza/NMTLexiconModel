@@ -135,29 +135,6 @@ def load_prior(config, sess, saver):
      tf.variables_initializer(prior_variables)
      sess.run(assign_tensors)
 
-def pretrain(config):
-    
-    logging.info('Reading pretrain data...')
-    pretrain_dictionary
-    text_iterator = TextIterator(
-                        source=config.pretrain_dictionary_src,
-                        target=config.pretrain_dictionary_trg,
-                        source_dicts=config.source_dicts,
-                        target_dict=config.target_dict,
-                        batch_size=config.batch_size,
-                        maxlen=config.maxlen,
-                        source_vocab_sizes=config.source_vocab_sizes,
-                        target_vocab_size=config.target_vocab_size,
-                        skip_empty=True,
-                        shuffle_each_epoch=config.shuffle_each_epoch,
-                        sort_by_length=config.sort_by_length,
-                        use_factor=(config.factors > 1),
-                        maxibatch_size=config.maxibatch_size,
-                        token_batch_size=config.token_batch_size,
-                        keep_data_in_memory=config.keep_train_set_in_memory)
-    logging.info('Done')
-    return text_iterator
-
 def load_data(config):
     logging.info('Reading data...')
     text_iterator = TextIterator(
@@ -196,8 +173,29 @@ def load_data(config):
     else:
         logging.info('no validation set loaded')
         valid_text_iterator = None
+
+    #egarzaj - pretrain data
+    if config.bilingual_pretrain and config.pretrain_dictionary_src and config.pretrain_dictionary_trg:
+        logging.info('Reading pretrain data...')
+        pretrain_text_iterator = TextIterator(
+            source=config.pretrain_dictionary_src,
+            target=config.pretrain_dictionary_trg,
+            source_dicts=config.source_dicts,
+            target_dict=config.target_dict,
+            batch_size=config.valid_batch_size,
+            maxlen=config.maxlen,
+            source_vocab_sizes=config.source_vocab_sizes,
+            target_vocab_size=config.target_vocab_size,
+            shuffle_each_epoch=False,
+            sort_by_length=True,
+            use_factor=(config.factors > 1),
+            maxibatch_size=config.maxibatch_size,
+            token_batch_size=config.valid_token_batch_size)
+    else:
+        logging.info('no pretrainning loaded')
+        pretrain_text_iterator = None
     logging.info('Done')
-    return text_iterator, valid_text_iterator
+    return text_iterator, valid_text_iterator , pretrain_text_iterator
 
 def load_dictionaries(config):
     source_to_num = [load_dict(d) for d in config.source_dicts]
@@ -260,17 +258,56 @@ def train(config, sess):
     config_as_dict = OrderedDict(sorted(vars(config).items()))
     json.dump(config_as_dict, open('%s.json' % config.saveto, 'wb'), indent=2)
 
-    #egarzaj - pre training
-    if config.bilingual_pretrain:
-        source_dic, target_dic,_,_ = pretrain(config)
-
-    text_iterator, valid_text_iterator = load_data(config)
+    text_iterator, valid_text_iterator, pretrain_text_iterator = load_data(config)
     _, _, num_to_source, num_to_target = load_dictionaries(config)
     total_loss = 0.
     n_sents, n_words = 0, 0
     last_time = time.time()
     logging.info("Initial uidx={}".format(progress.uidx))
-    for progress.eidx in xrange(progress.eidx, config.max_epochs):
+
+    #egarzaj - pretrain on all the bilingial dictionary
+    if config.bilingual_pretrain and config.pretrain_dictionary_src and config.pretrain_dictionary_trg:
+        logging.info('Starting training on pretrain data...')
+        for progress.eidx in xrange(progress.eidx, config.max_epochs):
+            #logging.info('Starting epoch {0}'.format(progress.eidx))
+            for source_sents, target_sents in pretrain_text_iterator:
+                if len(source_sents[0][0]) != config.factors:
+                    logging.error('Mismatch between number of factors in settings ({0}), and number in training corpus ({1})\n'.format(config.factors, len(source_sents[0][0])))
+                    sys.exit(1)
+                    x_in, x_mask_in, y_in, y_mask_in = prepare_data(source_sents, target_sents, maxlen=None)
+                    if x_in is None:
+                        logging.info('Minibatch with zero sample under length {0}'.format(config.maxlen))
+                        continue
+                    write_summary_for_this_batch = config.summaryFreq and ((progress.uidx % config.summaryFreq == 0) or (config.finish_after and progress.uidx % config.finish_after == 0))
+                    (factors, seqLen, batch_size) = x_in.shape
+                    inn = {x:x_in, y:y_in, x_mask:x_mask_in, y_mask:y_mask_in, training:True}
+                    out = [t, apply_grads, objective]
+                    if write_summary_for_this_batch:
+                        out += [merged]
+                    out_values = sess.run(out, feed_dict=inn)
+                    objective_value = out_values[2]
+                    total_loss += objective_value*batch_size
+                    n_sents += batch_size
+                    n_words += int(numpy.sum(y_mask_in))
+                    progress.uidx += 1
+                    
+                    if write_summary_for_this_batch:
+                        writer.add_summary(out_values[3], out_values[0])
+                
+                    if config.dispFreq and progress.uidx % config.dispFreq == 0:
+                        duration = time.time() - last_time
+                        disp_time = datetime.now().strftime('[%Y-%m-%d %H:%M:%S]')
+                        logging.info('{0} Epoch: {1} Update: {2}'.format(disp_time, progress.eidx, progress.uidx))
+                        last_time = time.time()
+                    
+        logging.info('Pretrain complete...')
+        logging.info('Saving...')
+        saver.save(sess, save_path=config.saveto, global_step=progress.uidx)
+        progress_path = '{0}-{1}.progress.json'.format(config.saveto, progress.uidx)
+        progress.save_to_json(progress_path)
+        logging.info('Done.')
+
+    for progress.eidx in xrange(0, config.max_epochs):
         logging.info('Starting epoch {0}'.format(progress.eidx))
         for source_sents, target_sents in text_iterator:
             if len(source_sents[0][0]) != config.factors:
@@ -499,9 +536,10 @@ def parse_args():
     data.add_argument('--summaryFreq', type=int, default=0, metavar='INT',
                          help="Save summaries after INT updates, if 0 do not save summaries (default: %(default)s)")
     #egarzaj - Pretraining dictionary
-    data.add_argument('--pretrain_dictionary', type=str, metavar='PATH',
+    data.add_argument('--pretrain_dictionary_src', type=str, metavar='PATH',
                          help="Bilingual pretraining dictionary")
-
+    data.add_argument('--pretrain_dictionary_trg', type=str, metavar='PATH',
+                         help="Bilingual pretraining dictionary")
 
     network = parser.add_argument_group('network parameters')
     network.add_argument('--embedding_size', '--dim_word', type=int, default=512, metavar='INT',
@@ -676,8 +714,8 @@ def parse_args():
         sys.exit(1)
 
     #egarzaj - Verify pre training bilingual dictionary is supplied if bilingual pre-train option is enabled
-    if config.bilingual_pretrain and not config.pretrain_dictionary:
-        logging.error('If bilingual-pretrain is enabled you should supply a bilingual dictionary with --pretrain_dictionary')
+    if config.bilingual_pretrain and (not config.pretrain_dictionary_src or not config.pretrain_dictionary_trg):
+        logging.error('If bilingual-pretrain is enabled you should supply a bilingual dictionary with --pretrain_dictionary_src and --pretrain_dictionary_trg')
         sys.exit(1)
 
     # set vocabulary sizes

@@ -371,11 +371,6 @@ class StandardModel(object):
             self.lexical = config.lexical
         else:
             self.lexical = None
-        #egarzaj - add pretraining model
-        if hasattr(config, 'bilingual_pretrain'):
-            self.bilingual_pretrain = config.bilingual_pretrain
-        else:
-            self.bilingual_pretrain = None
         
         # Dropout functions for words.
         # These probabilistically zero-out all embedding values for individual
@@ -410,10 +405,6 @@ class StandardModel(object):
 
         batch_size = tf.shape(self.x)[-1]  # dynamic value
         
-        if self.bilingual_pretrain:
-            logging.info('Pre-training model...')
-            saver = tf.train.Saver()
-        
         with tf.name_scope("encoder"):
             self.encoder = Encoder(config, batch_size, dropout_source,
                                    dropout_embedding, dropout_hidden)
@@ -421,7 +412,7 @@ class StandardModel(object):
 
         #egarzaj - lexical model
         if self.lexical:
-            logging.info('lexical model enabled...')
+            logging.info('Lexical model enabled...')
             with tf.name_scope("lexical_model"):
                 self.lexical_model =  FeedForwardLayer(in_size=config.state_size,
                                         out_size=config.state_size,
