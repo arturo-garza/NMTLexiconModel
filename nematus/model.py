@@ -29,6 +29,7 @@ class Decoder(object):
             context_mean = context_sum / tf.expand_dims(
                                             tf.reduce_sum(x_mask, axis=0),
                                             axis=1)
+
             self.init_state_layer = FeedForwardLayer(
                                         in_size=config.state_size * 2,
                                         out_size=config.state_size,
@@ -183,7 +184,7 @@ class Decoder(object):
                         prev_state,
                         gates_x=gates_x2d,
                         proposal_x=proposal_x2d)
-            att_ctx = self.attstep.forward(state) 
+            att_ctx = self.attstep.forward(state)
             state = self.grustep2.forward(state, att_ctx)
             #TODO: write att_ctx to tensorArray instead of having it as output of scan?
             return (state, att_ctx)
@@ -199,7 +200,8 @@ class Decoder(object):
         
         # egarzaj - Lexical model
         if self.lexical:
-            states = lexical_model.forward(states, input_is_3d=True)
+            c_t_h_t = tf.concat([attended_states, states],2)
+            states = lexical_model.forward(c_t_h_t , input_is_3d=True)
         
         logits = self.predictor.get_logits(y_embs, states, attended_states, multi_step=True)
         return logits
@@ -414,7 +416,7 @@ class StandardModel(object):
         if self.lexical:
             logging.info('Lexical model enabled...')
             with tf.name_scope("lexical_model"):
-                self.lexical_model =  FeedForwardLayer(in_size=config.state_size,
+                self.lexical_model =  FeedForwardLayer(in_size=3*config.state_size,
                                         out_size=config.state_size,
                                         batch_size=batch_size,
                                         non_linearity=tf.nn.tanh)
