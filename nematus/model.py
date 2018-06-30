@@ -201,7 +201,7 @@ class Decoder(object):
             c_embed = lexical_model.calc_c_embed(attended_states)
             logits = self.predictor.get_logits(y_embs, states, attended_states, lexical_model, c_embed, multi_step=True)
         else:
-            logits = self.predictor.get_logits(y_embs, states, attended_states, lexical_model, c_embed, multi_step=True)
+            logits = self.predictor.get_logits(y_embs, states, attended_states, lexical_model, multi_step=True)
         return logits
 
 class Predictor(object):
@@ -484,7 +484,7 @@ class StandardModel(object):
                 logging.info('Calling decoder with lexical model...')
                 self.logits = self.decoder.score(self.y, self.lexical_model)
             else:
-                self.logits = self.decoder.score(self.y)        
+                self.logits = self.decoder.score(self.y)
 
         with tf.name_scope("loss"):
             self.loss_layer = Masked_cross_entropy_loss(self.y, self.y_mask)
