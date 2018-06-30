@@ -201,7 +201,7 @@ class Decoder(object):
             c_embed = lexical_model.calc_c_embed(attended_states)
             logits = self.predictor.get_logits(y_embs, states, attended_states, lexical_model, c_embed, multi_step=True)
         else:
-            logits = self.predictor.get_logits(y_embs, states, attended_states, lexical_model, multi_step=True)
+            logits = self.predictor.get_logits(y_embs, states, attended_states, multi_step=True)
         return logits
 
 class Predictor(object):
