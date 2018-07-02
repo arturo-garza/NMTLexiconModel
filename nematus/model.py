@@ -262,11 +262,11 @@ class Predictor(object):
             _c_embed = lex_model.lexical_model.forward(_c_embed) + _c_embed
             #_c_embed = tf.nn.dropout(_c_embed, input_keep_prob, seed=ac.SEED) --- Dropout
             #_c_embed = project_embeds(_c_embed) -- fixnorm
-            f =tf.nn.l2_normalize(lex_model.lex_v, 0)
-            f_in = tf.transpose(f)
-            mult = tf.matmul(_c_embed, f_in)
-            mult_2 = tf.transpose(mult)
-            _lex_logit= mult_2+lex_model.lex_bias
+            #f =tf.nn.l2_normalize(lex_model.lex_v, 0)
+            #f_in = tf.transpose(f)
+            mult = tf.matmul(lex_model.lex_v, _c_embed)
+            #mult_2 = tf.transpose(mult)
+            _lex_logit= mult+lex_model.lex_bias
             hidden = hidden_emb + hidden_state + hidden_att_ctx + _lex_logit
         else:
             hidden = hidden_emb + hidden_state + hidden_att_ctx
@@ -354,7 +354,7 @@ class Encoder(object):
         else:
             concat_states = tf.concat([fwd_states, bwd_states], axis=2)
         return concat_states
-
+#egarza - add lexical
 class LexicalModel(object):
     def __init__(self, config, batch_size, dropout_source, dropout_embedding,
                  dropout_hidden, src_embs):
