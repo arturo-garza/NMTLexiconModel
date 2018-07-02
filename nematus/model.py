@@ -264,9 +264,8 @@ class Predictor(object):
             #_c_embed = project_embeds(_c_embed) -- fixnorm
             #f =tf.nn.l2_normalize(lex_model.lex_v, 0)
             #f_in = tf.transpose(f)
-            mult = tf.matmul(lex_model.lex_v, _c_embed)
+            _lex_logit = tf.matmul(lex_model.lex_v, _c_embed) + lex_model.lex_bias
             #mult_2 = tf.transpose(mult)
-            _lex_logit= mult+lex_model.lex_bias
             hidden = hidden_emb + hidden_state + hidden_att_ctx + _lex_logit
         else:
             hidden = hidden_emb + hidden_state + hidden_att_ctx
@@ -363,7 +362,7 @@ class LexicalModel(object):
                                                    out_size=config.state_size,
                                                    batch_size=batch_size,
                                                    non_linearity=tf.nn.tanh)
-        self.lex_v = tf.get_variable('lex_v', shape=[config.source_vocab_sizes[0], config.embedding_size], dtype=tf.float32)
+        self.lex_v = tf.get_variable('lex_v', shape=[config.embedding_size, config.source_vocab_sizes[0]], dtype=tf.float32)
         #self.lex_embedding = embed_norm * tf.nn.l2_normalize(self.lex_v, 0) -- fixnorm
         self.lex_bias = tf.get_variable('lex_bias', shape=[config.embedding_size], dtype=tf.float32)
         self.src_embs=src_embs
