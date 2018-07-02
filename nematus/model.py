@@ -362,7 +362,7 @@ class LexicalModel(object):
                                                    out_size=config.state_size,
                                                    batch_size=batch_size,
                                                    non_linearity=tf.nn.tanh)
-        self.lex_v = tf.get_variable('lex_v', shape=[config.embedding_size, config.source_vocab_sizes[0]], dtype=tf.float32)
+        self.lex_v = tf.get_variable('lex_v', shape=[config.embedding_size, config.target_vocab_size], dtype=tf.float32)
         #self.lex_embedding = embed_norm * tf.nn.l2_normalize(self.lex_v, 0) -- fixnorm
         self.lex_bias = tf.get_variable('lex_bias', shape=[config.embedding_size], dtype=tf.float32)
         self.src_embs=src_embs
