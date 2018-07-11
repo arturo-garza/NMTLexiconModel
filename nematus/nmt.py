@@ -300,6 +300,26 @@ def train(config, sess):
                         logging.info('{0} Epoch: {1} Update: {2}'.format(disp_time, progress.eidx, progress.uidx))
                         last_time = time.time()
                     
+                    #Validate
+                    if config.prevalidFreq and progress.uidx % config.prevalidFreq == 0:
+                        print(config.prevalidFreq)
+                        costs = validate(config, sess, valid_text_iterator, model)
+                        # validation loss is mean of normalized sentence log probs
+                        valid_loss = sum(costs) / len(costs)
+                        if (len(progress.history_errs) == 0 or
+                            valid_loss < min(progress.history_errs)):
+                            progress.bad_counter = 0
+                            saver.save(sess, save_path=config.saveto)
+                            progress_path = '{0}.progress.json'.format(config.saveto)
+                            progress.save_to_json(progress_path)
+                        else:
+                            progress.bad_counter += 1
+                            if progress.bad_counter > config.patience:
+                                logging.info('Early Stop!')
+                                progress.estop = True
+                                break
+                        progress.history_errs.append(valid_loss)
+                
         logging.info('Pretrain complete...')
         logging.info('Saving...')
         saver.save(sess, save_path=config.saveto, global_step=progress.uidx)
@@ -625,7 +645,10 @@ def parse_args():
     #egarzaj - Pretraining option
     training.add_argument('--bilingual_pretrain', action='store_true',
                          help="Pre train using a bilingual dictionary provided with the --pretrain_dictionary option")
-
+    #egarzaj - Pretraining option
+    training.add_argument('--prevalidFreq', type=int, default=100,
+                           help="Pre train using a bilingual dictionary provided with the --pretrain_dictionary option")
+                         
     validation = parser.add_argument_group('validation parameters')
     validation.add_argument('--valid_source_dataset', type=str, default=None, metavar='PATH', 
                          help="source validation corpus (default: %(default)s)")
