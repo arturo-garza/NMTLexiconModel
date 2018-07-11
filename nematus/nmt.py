@@ -268,6 +268,7 @@ def train(config, sess):
     #egarzaj - pretrain on all the bilingial dictionary
     if config.bilingual_pretrain and config.pretrain_dictionary_src and config.pretrain_dictionary_trg:
         logging.info('Starting training on pretrain data...')
+        logging.info('config prevalid freq '+`config.prevalidFreq`)
         for progress.eidx in xrange(progress.eidx, config.max_epochs):
             #logging.info('Starting epoch {0}'.format(progress.eidx))
             for source_sents, target_sents in pretrain_text_iterator:
@@ -289,20 +290,21 @@ def train(config, sess):
                     total_loss += objective_value*batch_size
                     n_sents += batch_size
                     n_words += int(numpy.sum(y_mask_in))
+                    logging.info('progress.uidx '+`progress.uidx`)
                     progress.uidx += 1
                     
                     if write_summary_for_this_batch:
                         writer.add_summary(out_values[3], out_values[0])
-                
-                    if config.dispFreq and progress.uidx % config.dispFreq == 0:
+
+                    if config.prevalidFreq and progress.uidx % config.prevalidFreq == 0:
                         duration = time.time() - last_time
                         disp_time = datetime.now().strftime('[%Y-%m-%d %H:%M:%S]')
                         logging.info('{0} Epoch: {1} Update: {2}'.format(disp_time, progress.eidx, progress.uidx))
                         last_time = time.time()
-                    
+
                     #Validate
                     if config.prevalidFreq and progress.uidx % config.prevalidFreq == 0:
-                        print(config.prevalidFreq)
+                        #print(config.prevalidFreq)
                         costs = validate(config, sess, valid_text_iterator, model)
                         # validation loss is mean of normalized sentence log probs
                         valid_loss = sum(costs) / len(costs)
