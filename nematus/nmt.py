@@ -184,8 +184,8 @@ def load_data(config):
             target_dict=config.target_dict,
             batch_size=config.valid_batch_size,
             maxlen=config.maxlen,
-            source_vocab_sizes=config.source_vocab_sizes,
-            target_vocab_size=config.target_vocab_size,
+            #source_vocab_sizes=config.source_vocab_sizes,
+            #target_vocab_size=config.target_vocab_size,
             shuffle_each_epoch=False,
             sort_by_length=True,
             use_factor=(config.factors > 1),
@@ -272,6 +272,7 @@ def train(config, sess):
         for progress.eidx in xrange(progress.eidx, config.max_epochs):
             #logging.info('Starting epoch {0}'.format(progress.eidx))
             for source_sents, target_sents in pretrain_text_iterator:
+                #logging.info(target_sents)
                 if len(source_sents[0][0]) != config.factors:
                     logging.error('Mismatch between number of factors in settings ({0}), and number in training corpus ({1})\n'.format(config.factors, len(source_sents[0][0])))
                     sys.exit(1)
