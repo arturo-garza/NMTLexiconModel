@@ -175,14 +175,16 @@ def load_data(config):
         valid_text_iterator = None
 
     #egarzaj - pretrain data
-    if config.bilingual_pretrain and config.pretrain_dictionary_src and config.pretrain_dictionary_trg:
+    if config.bilingual_pretrain and config.pretrain_vocabs:
         logging.info('Reading pretrain data...')
         pretrain_text_iterator = TextIterator(
             source=config.pretrain_dictionary_src,
             target=config.pretrain_dictionary_trg,
-            source_dicts=config.source_dicts,
-            target_dict=config.target_dict,
-            batch_size=config.valid_batch_size,
+            #source_dicts=config.source_dicts,
+            #target_dict=config.target_dict,
+            source_dicts=config.pre_source_dicts,
+            target_dict=config.pre_target_dict,
+            batch_size=config.batch_size,
             maxlen=config.maxlen,
             #source_vocab_sizes=config.source_vocab_sizes,
             #target_vocab_size=config.target_vocab_size,
@@ -563,6 +565,9 @@ def parse_args():
                          help="Bilingual pretraining dictionary")
     data.add_argument('--pretrain_dictionary_trg', type=str, metavar='PATH',
                          help="Bilingual pretraining dictionary")
+    #egarzaj - Pretrain vocabularies
+    data.add_argument('--pretrain_vocabs', type=str, metavar='PATH', nargs="+",
+                         help="Bilingual pretraining dictionary")
 
     network = parser.add_argument_group('network parameters')
     network.add_argument('--embedding_size', '--dim_word', type=int, default=512, metavar='INT',
@@ -770,6 +775,51 @@ def parse_args():
         except:
             logging.error('failed to determine vocabulary size from file: {0}'.format(config.dictionaries[i]))
         vocab_sizes[i] = max(d.values()) + 1
+
+    #egarzaj - Config pretrain vocabularies
+    if config.bilingual_pretrain:
+        # set pre_vocab_sizes
+        pre_vocab_sizes = []
+        if config.source_vocab_sizes == None:
+            pre_vocab_sizes = [-1] * config.factors
+        elif len(config.source_vocab_sizes) == config.factors:
+            pre_vocab_sizes = config.source_vocab_sizes
+        elif len(config.source_vocab_sizes) < config.factors:
+            num_missing = config.factors - len(config.source_vocab_sizes)
+            pre_vocab_sizes += config.source_vocab_sizes + [-1] * num_missing
+        else:
+            logging.error('too many values supplied to \'--source_vocab_sizes\' option (expected one per factor = {0})'.format(config.factors))
+            sys.exit(1)
+        if config.target_vocab_size == -1:
+            pre_vocab_sizes.append(-1)
+        else:
+            pre_vocab_sizes.append(config.target_vocab_size)
+
+
+        # for unspecified vocabulary sizes, determine sizes from vocabulary dictionaries
+        for i, pre_vocab_size in enumerate(pre_vocab_sizes):
+            if pre_vocab_size >= 0:
+                continue
+            try:
+                d = load_dict(config.pretrain_vocabs[i])
+                logging.info("len "+`len(d)`+" "+`i`)
+            except:
+                logging.error('failed to determine vocabulary size from file: {0}'.format(config.pretrain_vocabs[i]))
+
+        #logging.info(pre_vocab_sizes)
+            a = max(d.values()) + 1
+            print("type "+`type(pre_vocab_sizes)`)
+            pre_vocab_sizes[i] = int(a)
+            logging.info(a)
+            
+            
+        #egarzaj- Pretrain
+        config.pre_source_dicts = config.pretrain_vocabs[:-1]
+        config.pre_source_vocab_sizes = pre_vocab_sizes[:-1]
+        config.pre_target_dict = config.pretrain_vocabs[-1]
+        #config.pre_target_vocab_size = pre_vocab_sizes[-1]
+
+
 
     config.source_dicts = config.dictionaries[:-1]
     config.source_vocab_sizes = vocab_sizes[:-1]
