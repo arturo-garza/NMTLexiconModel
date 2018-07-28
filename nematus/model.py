@@ -269,7 +269,7 @@ class Predictor(object):
             hidden = hidden_emb + hidden_state + hidden_att_ctx + _lex_logit
         else:
             hidden = hidden_emb + hidden_state + hidden_att_ctx
-        hidden = hidden_emb + hidden_state + hidden_att_ctx
+        #hidden = hidden_emb + hidden_state + hidden_att_ctx
         if self.config.output_hidden_activation == 'tanh':
             hidden = tf.tanh(hidden)
         elif self.config.output_hidden_activation == 'relu':
