@@ -170,7 +170,14 @@ class Decoder(object):
             y_embs = tf.pad(y_embs,
                             mode='CONSTANT',
                             paddings=[[1,0],[0,0],[0,0]]) # prepend zeros
-
+        #if self.lexical:
+            #egarza - define output vocab same size as target embedding
+        #    lex_but_last = tf.slice(y, [0,0], [tf.shape(y)[0]-1, -1])
+        #    lexical_model.lex_v=self.y_emb_layer.forward(lex_but_last)
+        #    lexical_model.lex_v = tf.pad(lexical_model.lex_v,
+        #                    mode='CONSTANT',
+        #                    paddings=[[1,0],[0,0],[0,0]]) # prepend zeros
+        
         init_attended_context = tf.zeros([tf.shape(self.init_state)[0], self.state_size*2])
         init_state_att_ctx = (self.init_state, init_attended_context)
         gates_x, proposal_x = self.grustep1.precompute_from_x(y_embs)
@@ -200,6 +207,9 @@ class Decoder(object):
         if self.lexical:
             c_embed = lexical_model.calc_c_embed(attended_states)
             logits = self.predictor.get_logits(y_embs, states, attended_states, lexical_model, c_embed, multi_step=True)
+        
+        #c_embed = lexical_model.calc_c_embed(attended_states)
+        #logits = self.predictor.get_logits(y_embs, states, attended_states, lexical_model, multi_step=True)
         else:
             logits = self.predictor.get_logits(y_embs, states, attended_states, multi_step=True)
         return logits
@@ -232,7 +242,25 @@ class Predictor(object):
                                     non_linearity=lambda y: y,
                                     use_layer_norm=config.use_layer_norm,
                                     dropout_input=dropout_hidden)
-
+        
+        with tf.name_scope("attended_context_to_hidden"):
+            self.att_ctx_to_hidden = FeedForwardLayer(
+                                  in_size=2*config.state_size,
+                                  out_size=config.embedding_size,
+                                  batch_size=batch_size,
+                                  non_linearity=lambda y: y,
+                                  use_layer_norm=config.use_layer_norm,
+                                  dropout_input=dropout_hidden)
+        
+        with tf.name_scope("lexical_context_to_hidden"):
+            self.lexical_to_logits = FeedForwardLayer(
+                                      in_size=2*config.state_size,
+                                      out_size=config.target_vocab_size,
+                                      batch_size=batch_size,
+                                      non_linearity=lambda y: y,
+                                      use_layer_norm=config.use_layer_norm,
+                                      dropout_input=dropout_hidden)
+        
         if config.output_hidden_activation == 'prelu':
             with tf.name_scope("hidden_prelu"):
                 self.hidden_prelu = PReLU(in_size=config.embedding_size)
@@ -258,18 +286,27 @@ class Predictor(object):
     
         #egarza - add lexical model to logits
         if lex_model:
-            _c_embed = tf.reshape(c_embed, [-1, lex_model.embedding_size])
+            #c_embed = lex_model.calc_c_embed(attended_states)
+            _c_embed = tf.reshape(c_embed, [-1, 2*lex_model.embedding_size])
             _c_embed = lex_model.lexical_model.forward(_c_embed) + _c_embed
             #_c_embed = tf.nn.dropout(_c_embed, input_keep_prob, seed=ac.SEED) --- Dropout
             #_c_embed = project_embeds(_c_embed) -- fixnorm
             #f =tf.nn.l2_normalize(lex_model.lex_v, 0)
             #f_in = tf.transpose(f)
-            _lex_logit = tf.matmul(_c_embed, lex_model.lex_v) + lex_model.lex_bias
+            
+            #print(lex_model.lex_v.get_shape())
+            #print(_c_embed.get_shape())
+            #lex_embeddings = tf.reshape(lex_model.lex_v, [self.config.embedding_size, -1])
+            _lex_logit =self.lexical_to_logits.forward(_c_embed)
+            #_lex_logit = lex_model.matmul3d(_c_embed, lex_model.lex_v) +
+            #_lex_logit_int = tf.matmul(_c_embed, lex_embeddings)
+            _lex_logit = tf.reshape(_lex_logit, [-1, self.config.batch_size, self.config.target_vocab_size])
+        
             #mult_2 = tf.transpose(mult)
-            hidden = hidden_emb + hidden_state + hidden_att_ctx + _lex_logit
         else:
-            hidden = hidden_emb + hidden_state + hidden_att_ctx
-        #hidden = hidden_emb + hidden_state + hidden_att_ctx
+            pass
+            #hidden = hidden_emb + hidden_state + hidden_att_ctx
+        hidden = hidden_emb + hidden_state + hidden_att_ctx
         if self.config.output_hidden_activation == 'tanh':
             hidden = tf.tanh(hidden)
         elif self.config.output_hidden_activation == 'relu':
@@ -281,10 +318,28 @@ class Predictor(object):
         else:
             assert(False, 'Unknown output activation function "%s"' % self.config.output_hidden_activation)
 
+        #egarza - modified the name to logits step to use it later in conjuction with lex
         with tf.name_scope("hidden_to_logits"):
-            logits = self.hidden_to_logits.forward(hidden, input_is_3d=multi_step)
-        
-        return logits 
+            logits_step = self.hidden_to_logits.forward(hidden, input_is_3d=multi_step)
+            #logits = self.hidden_to_logits.forward(hidden, input_is_3d=multi_step)
+
+        #egarza - lexical
+        if lex_model:
+            #shape = tf.shape(logits_step)
+            #mat_shape = tf.shape(_lex_logit)
+            
+            
+            logits_shape=tf.shape(logits_step)
+            lex_shape=tf.shape(_lex_logit)
+            #print(logits_step.get_shape().as_list())
+#            logits_step_resh = tf.reshape(logits_step, [logits_shape[0]*logits_shape[1], logits_shape[2]])
+#            logits_res = logits_step_resh + _lex_logit
+#            logits = tf.reshape(logits_res, [logits_shape[0], logits_shape[1], logits_shape[2]])
+            logits = logits_step + _lex_logit
+        else:
+            logits = logits_step
+
+        return logits
 
 
 class Encoder(object):
@@ -357,19 +412,42 @@ class Encoder(object):
 class LexicalModel(object):
     def __init__(self, config, batch_size, dropout_source, dropout_embedding,
                  dropout_hidden, src_embs):
+        
         with tf.name_scope("lexical_model"):
-            self.lexical_model =  FeedForwardLayer(in_size=config.embedding_size,
-                                                   out_size=config.state_size,
+            self.lexical_model =  FeedForwardLayer(in_size=2*config.embedding_size,
+                                                   out_size=2*config.state_size,
                                                    batch_size=batch_size,
                                                    non_linearity=tf.nn.tanh)
-        self.lex_v = tf.get_variable('lex_v', shape=[config.embedding_size, config.embedding_size], dtype=tf.float32)
+        #self.lex_v = tf.get_variable('lex_v', shape=[config.embedding_size, config.embedding_size], dtype=tf.float32)
+        #lex_embs = tf.pad(lex_embs,mode='CONSTANT',paddings=[[1,0],[0,0],[0,0]]) # prepend zeros
+        self.lex_v = tf.get_variable('lex_v', shape=(2*config.embedding_size,config.target_vocab_size), dtype=tf.float32)
+        #seqLen=None
+        #self.lex_v = tf.placeholder(dtype=tf.float32 , name = 'lex_v', shape=(seqLen ,config.target_vocab_size))
+        # d = tf.slice(lex_voc, [0,0], [tf.shape(lex_voc)[0]-1, -1])
+        #self.lex_v = lex_voc#self.lexical_model.forward(d)
+        #print(tf.shape(d)[0])
+        #embs_dims = tf.Variable((config.target_vocab_size, config.embedding_size), name='embeddings')
+        
+        #self.lex_v = tf.nn.embedding_lookup(embs_dims, lex_but_last)
+        # y_embs = self.y_emb_layer.forward(y_but_last)
+        #print(y_embs)
+        #if self.dropout_target != None:
+        #    y_embs = self.dropout_target(y_embs)
+        #y_embs = tf.pad(y_embs,
+        #                mode='CONSTANT',
+        #                paddings=[[1,0],[0,0],[0,0]]) # prepend zeros
+
         #self.lex_embedding = embed_norm * tf.nn.l2_normalize(self.lex_v, 0) -- fixnorm
-        self.lex_bias = tf.get_variable('lex_bias', shape=[config.embedding_size], dtype=tf.float32)
+        #self.lex_bias = tf.get_variable('lex_bias', shape=[config.embedding_size], dtype=tf.float32)
+        self.lex_bias = tf.get_variable('lex_bias',
+                                        shape=(config.target_vocab_size),
+                                        dtype=tf.float32)
         self.src_embs=src_embs
+        self.config=config
         self.batch_size=batch_size
         self.embedding_size=config.embedding_size
     
-    def matmul3d(x3d, matrix):
+    def matmul3d(self, x3d, matrix):
         shape = tf.shape(x3d)
         mat_shape = tf.shape(matrix)
         x2d = tf.reshape(x3d, [shape[0]*shape[1], shape[2]])
@@ -378,8 +456,12 @@ class LexicalModel(object):
         return result3d
     
     def calc_c_embed(self, attended_states):
-        c_embed = tf.multiply(tf.reshape(attended_states, [self.batch_size, -1, 1]), self.src_embs)
-        c_embed = tf.reduce_sum(c_embed, 1)
+        c_embed = attended_states
+        #c_embed = tf.multiply(tf.reshape(attended_states, [-1, self.config.batch_size, self.config.state_size]), self.src_embs)
+        
+        #c_embed = tf.multiply(attended_states, self.src_embs)
+
+        #c_embed = tf.reduce_sum(c_embed, 1)
         c_embed = tf.tanh(c_embed)
         return c_embed
     
@@ -474,7 +556,7 @@ class StandardModel(object):
         if config.lexical:
             logging.info('Lexical model enabled...')
             self.lexical_model = LexicalModel(config, batch_size, dropout_source, dropout_embedding, dropout_hidden, src_embs)
-            self.lexicons = self.lexical_model.calc_lexicons(src_embs, input_is_3d=True)
+            #self.lexicons = self.lexical_model.calc_lexicons(src_embs, input_is_3d=True)
         with tf.name_scope("decoder"):
             self.decoder = Decoder(config, ctx, self.x_mask, dropout_target,
                                    dropout_embedding, dropout_hidden)
