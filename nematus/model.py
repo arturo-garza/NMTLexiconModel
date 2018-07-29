@@ -170,13 +170,13 @@ class Decoder(object):
             y_embs = tf.pad(y_embs,
                             mode='CONSTANT',
                             paddings=[[1,0],[0,0],[0,0]]) # prepend zeros
-        #if self.lexical:
+        if self.lexical:
             #egarza - define output vocab same size as target embedding
-        #    lex_but_last = tf.slice(y, [0,0], [tf.shape(y)[0]-1, -1])
-        #    lexical_model.lex_v=self.y_emb_layer.forward(lex_but_last)
-        #    lexical_model.lex_v = tf.pad(lexical_model.lex_v,
-        #                    mode='CONSTANT',
-        #                    paddings=[[1,0],[0,0],[0,0]]) # prepend zeros
+            lex_but_last = tf.slice(y, [0,0], [tf.shape(y)[0]-1, -1])
+            lexical_model.lex_v=self.y_emb_layer.forward(lex_but_last)
+            lexical_model.lex_v = tf.pad(lexical_model.lex_v,
+                            mode='CONSTANT',
+                            paddings=[[1,0],[0,0],[0,0]]) # prepend zeros
         
         init_attended_context = tf.zeros([tf.shape(self.init_state)[0], self.state_size*2])
         init_state_att_ctx = (self.init_state, init_attended_context)
@@ -300,7 +300,7 @@ class Predictor(object):
             _lex_logit =self.lexical_to_logits.forward(_c_embed)
             #_lex_logit = lex_model.matmul3d(_c_embed, lex_model.lex_v) +
             #_lex_logit_int = tf.matmul(_c_embed, lex_embeddings)
-            _lex_logit = tf.reshape(_lex_logit, [-1, self.config.batch_size, self.config.target_vocab_size])
+            #_lex_logit = tf.reshape(_lex_logit, [-1, self.config.batch_size, self.config.target_vocab_size])
         
             #mult_2 = tf.transpose(mult)
         else:
@@ -420,9 +420,9 @@ class LexicalModel(object):
                                                    non_linearity=tf.nn.tanh)
         #self.lex_v = tf.get_variable('lex_v', shape=[config.embedding_size, config.embedding_size], dtype=tf.float32)
         #lex_embs = tf.pad(lex_embs,mode='CONSTANT',paddings=[[1,0],[0,0],[0,0]]) # prepend zeros
-        self.lex_v = tf.get_variable('lex_v', shape=(2*config.embedding_size,config.target_vocab_size), dtype=tf.float32)
-        #seqLen=None
-        #self.lex_v = tf.placeholder(dtype=tf.float32 , name = 'lex_v', shape=(seqLen ,config.target_vocab_size))
+        #self.lex_v = tf.get_variable('lex_v', shape=(2*config.embedding_size,config.target_vocab_size), dtype=tf.float32)
+        seqLen=None
+        self.lex_v = tf.placeholder(dtype=tf.float32 , name = 'lex_v', shape=(seqLen ,config.target_vocab_size))
         # d = tf.slice(lex_voc, [0,0], [tf.shape(lex_voc)[0]-1, -1])
         #self.lex_v = lex_voc#self.lexical_model.forward(d)
         #print(tf.shape(d)[0])
@@ -456,7 +456,8 @@ class LexicalModel(object):
         return result3d
     
     def calc_c_embed(self, attended_states):
-        c_embed = attended_states
+        c_embed = tf.reduce_sum(attended_states, 0)
+        #c_embed = imresize(self.src_embs,size(attended_states),'nearest');
         #c_embed = tf.multiply(tf.reshape(attended_states, [-1, self.config.batch_size, self.config.state_size]), self.src_embs)
         
         #c_embed = tf.multiply(attended_states, self.src_embs)
