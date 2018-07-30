@@ -456,7 +456,9 @@ class LexicalModel(object):
         return result3d
     
     def calc_c_embed(self, attended_states):
-        c_embed = tf.reduce_sum(attended_states, 0)
+        attended = tf.reduce_sum(attended_states, 0)
+	embeds = tf.reduce_mean(self.embs)
+        c_embed = tf.multiply(embeds, attended) 
         #c_embed = imresize(self.src_embs,size(attended_states),'nearest');
         #c_embed = tf.multiply(tf.reshape(attended_states, [-1, self.config.batch_size, self.config.state_size]), self.src_embs)
         
