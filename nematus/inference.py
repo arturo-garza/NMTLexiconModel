@@ -86,7 +86,7 @@ def construct_beam_search_functions(models, beam_size):
         for j in range(len(models)):
             d = models[j].decoder
             states1 = d.grustep1.forward(prev_base_states[j], prev_embs[j])
-            att_ctx = d.attstep.forward(states1)
+            att_ctx, scores = d.attstep.forward(states1)
             base_states[j] = d.grustep2.forward(states1, att_ctx)
             if d.high_gru_stack == None:
                 stack_output = base_states[j]
