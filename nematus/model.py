@@ -400,14 +400,14 @@ class LexicalModel(object):
         self.config=config
         #self.lex_embedding = embed_norm * tf.nn.l2_normalize(self.lex_v, 0) -- fixnorm
 
-    def matmul3d(self, x3d, matrix):
-        shape = tf.shape(x3d)
-        mat_shape = tf.shape(matrix)
-        x2d = tf.reshape(x3d, [shape[0]*shape[1], shape[2]])
-        result2d = tf.matmul(x2d, matrix)
-        result3d = tf.reshape(result2d, [shape[0], shape[1], mat_shape[1]])
-        return result3d
-    
+#    def matmul3d(self, x3d, matrix):
+#        shape = tf.shape(x3d)
+#        mat_shape = tf.shape(matrix)
+#        x2d = tf.reshape(x3d, [shape[0]*shape[1], shape[2]])
+#        result2d = tf.matmul(x2d, matrix)
+#        result3d = tf.reshape(result2d, [shape[0], shape[1], mat_shape[1]])
+#        return result3d
+
     def calc_c_embed(self, attention_mtx):
         attended = attention_mtx
         embeds = self.src_embs
@@ -416,7 +416,7 @@ class LexicalModel(object):
         c_embed = tf.tanh(c_embed)
         return c_embed
     
-    def project_embeds(x, axis=1): ##--- fixnorm (might not be necessary) ##
+    def project_embeds(x, embed_norm=3.5, axis=1): ##--- fixnorm (might not be necessary) ##
         return embed_norm * tf.nn.l2_normalize(x, axis)
 
     def calc_lexicons(self, x, input_is_3d=False):
