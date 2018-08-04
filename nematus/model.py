@@ -45,7 +45,11 @@ class Decoder(object):
             self.y_emb_layer = EmbeddingLayer(
                                 vocabulary_size=config.target_vocab_size,
                                 embedding_size=config.embedding_size)
-
+        
+            if config.fixnorm:
+                norm = LayerNormLayer(config.embedding_size)
+                self.y_emb_layer.embeddings = config.firxnorm_r_value * norm.forward(self.y_emb_layer.get_embeddings())
+        
         with tf.name_scope("base"):
             with tf.name_scope("gru0"):
                 self.grustep1 = GRUStep(
@@ -288,8 +292,9 @@ class Predictor(object):
         if lex_model:
             _c_embed=c_embed
             _c_embed = lex_model.lexical_model.forward(_c_embed, input_is_3d=multi_step) + _c_embed
-            #_c_embed = tf.nn.dropout(_c_embed, input_keep_prob, seed=ac.SEED) --- Dropout
-            #_c_embed = project_embeds(_c_embed) -- fixnorm
+            if self.config.fixnorm:
+                norm=LayerNormLayer(self.config.embedding_size)
+                _c_embed = norm.forward(_c_embed) #-- fixnorm
             _lex_logit = self.lexical_to_logits.forward(_c_embed, input_is_3d=multi_step)
         else:
             pass
@@ -304,6 +309,12 @@ class Predictor(object):
             pass
         else:
             assert(False, 'Unknown output activation function "%s"' % self.config.output_hidden_activation)
+
+        #Apply normalise if it is enabled
+        if self.config.fixnorm:
+            norm=LayerNormLayer(self.config.embedding_size)
+            hidden=norm.forward(hidden) #-- fixnorm
+            #hidden=lexical_model.project_embeds(hidden)
 
         #egarza - modified the name to logits step to use it later in conjuction with lex
         with tf.name_scope("hidden_to_logits"):
@@ -416,7 +427,8 @@ class LexicalModel(object):
         c_embed = tf.tanh(c_embed)
         return c_embed
     
-    def project_embeds(x, embed_norm=3.5, axis=1): ##--- fixnorm (might not be necessary) ##
+    def project_embeds(x, axis=1): ##--- fixnorm (might not be necessary) ##
+        embed_norm=self.config.firxnorm_r_value
         return embed_norm * tf.nn.l2_normalize(x, axis)
 
     def calc_lexicons(self, x, input_is_3d=False):

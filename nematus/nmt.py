@@ -647,9 +647,15 @@ def parse_args():
     training.add_argument('--optimizer', type=str, default="adam",
                          choices=['adam'],
                          help="optimizer (default: %(default)s)")
-    #egarzaj - Add option
+    #egarzaj - Add option lexical
     training.add_argument('--lexical', action='store_true',
                          help="Train using a lexical model")
+    #egarzaj - Add option fixnorm
+    training.add_argument('--fixnorm', action='store_true',
+                           help="Train fixing the norm of all target word embeddings to some value r")
+    #egarzaj - Add option fixnorma value
+    training.add_argument('--firxnorm_r_value', type=float, default=3.5, metavar='FLOAT',
+                          help="r value with which you want to fix the norm of the target word embeddings.")
     #egarzaj - Pretraining option
     training.add_argument('--bilingual_pretrain', action='store_true',
                          help="Pre train using a bilingual dictionary provided with the --pretrain_dictionary option")
@@ -748,7 +754,10 @@ def parse_args():
     if config.bilingual_pretrain and (not config.pretrain_dictionary_src or not config.pretrain_dictionary_trg):
         logging.error('If bilingual-pretrain is enabled you should supply a bilingual dictionary with --pretrain_dictionary_src and --pretrain_dictionary_trg')
         sys.exit(1)
-
+    #egarzaj - Verify the r value is supplied if fixnorm is requested
+#    if config.fixnorm and (not config.pretrain_dictionary_src or not config.pretrain_dictionary_trg):
+#        logging.error('If fixnorm is enabled you should supply a value for r to which the target embeddings norm should be fixed with --firxnorm_r_value')
+#        sys.exit(1)
     # set vocabulary sizes
     vocab_sizes = []
     if config.source_vocab_sizes == None:
