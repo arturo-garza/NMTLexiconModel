@@ -47,8 +47,8 @@ class Decoder(object):
                                 embedding_size=config.embedding_size)
         
             if config.fixnorm:
-                norm = LayerNormLayer(config.embedding_size)
-                self.y_emb_layer.embeddings = config.firxnorm_r_value * norm.forward(self.y_emb_layer.get_embeddings())
+                #norm = LayerNormLayer(config.embedding_size)
+                self.y_emb_layer.embeddings = config.fixnorm_r_value * tf.nn.l2_normalize(self.y_emb_layer.get_embeddings(), 0)
         
         with tf.name_scope("base"):
             with tf.name_scope("gru0"):
@@ -293,8 +293,8 @@ class Predictor(object):
             _c_embed=c_embed
             _c_embed = lex_model.lexical_model.forward(_c_embed, input_is_3d=multi_step) + _c_embed
             if self.config.fixnorm:
-                norm=LayerNormLayer(self.config.embedding_size)
-                _c_embed = norm.forward(_c_embed) #-- fixnorm
+                #self.norm=LayerNormLayer(self.config.embedding_size)
+                _c_embed = self.config.fixnorm_r_value * tf.nn.l2_normalize(_c_embed, 1)#-- fixnorm
             _lex_logit = self.lexical_to_logits.forward(_c_embed, input_is_3d=multi_step)
         else:
             pass
@@ -312,8 +312,8 @@ class Predictor(object):
 
         #Apply normalise if it is enabled
         if self.config.fixnorm:
-            norm=LayerNormLayer(self.config.embedding_size)
-            hidden=norm.forward(hidden) #-- fixnorm
+            #self.norm=LayerNormLayer(self.config.embedding_size)
+            hidden=self.config.fixnorm_r_value * tf.nn.l2_normalize(hidden,1) #-- fixnorm
             #hidden=lexical_model.project_embeds(hidden)
 
         #egarza - modified the name to logits step to use it later in conjuction with lex
@@ -428,7 +428,7 @@ class LexicalModel(object):
         return c_embed
     
     def project_embeds(x, axis=1): ##--- fixnorm (might not be necessary) ##
-        embed_norm=self.config.firxnorm_r_value
+        embed_norm=self.config.fixnorm_r_value
         return embed_norm * tf.nn.l2_normalize(x, axis)
 
     def calc_lexicons(self, x, input_is_3d=False):

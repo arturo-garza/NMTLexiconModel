@@ -654,7 +654,7 @@ def parse_args():
     training.add_argument('--fixnorm', action='store_true',
                            help="Train fixing the norm of all target word embeddings to some value r")
     #egarzaj - Add option fixnorma value
-    training.add_argument('--firxnorm_r_value', type=float, default=3.5, metavar='FLOAT',
+    training.add_argument('--fixnorm_r_value', type=float, default=3.5, metavar='FLOAT',
                           help="r value with which you want to fix the norm of the target word embeddings.")
     #egarzaj - Pretraining option
     training.add_argument('--bilingual_pretrain', action='store_true',
@@ -756,7 +756,7 @@ def parse_args():
         sys.exit(1)
     #egarzaj - Verify the r value is supplied if fixnorm is requested
 #    if config.fixnorm and (not config.pretrain_dictionary_src or not config.pretrain_dictionary_trg):
-#        logging.error('If fixnorm is enabled you should supply a value for r to which the target embeddings norm should be fixed with --firxnorm_r_value')
+#        logging.error('If fixnorm is enabled you should supply a value for r to which the target embeddings norm should be fixed with --fixnorm_r_value')
 #        sys.exit(1)
     # set vocabulary sizes
     vocab_sizes = []
