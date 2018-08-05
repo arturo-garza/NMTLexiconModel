@@ -366,7 +366,7 @@ def train(config, sess):
                 total_loss = 0.
                 n_sents = 0
                 n_words = 0
-
+    
             if config.saveFreq and progress.uidx % config.saveFreq == 0:
                 saver.save(sess, save_path=config.saveto, global_step=progress.uidx)
                 progress_path = '{0}-{1}.progress.json'.format(config.saveto, progress.uidx)

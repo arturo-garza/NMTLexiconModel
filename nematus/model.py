@@ -293,8 +293,7 @@ class Predictor(object):
             _c_embed=c_embed
             _c_embed = lex_model.lexical_model.forward(_c_embed, input_is_3d=multi_step) + _c_embed
             if self.config.fixnorm:
-                #self.norm=LayerNormLayer(self.config.embedding_size)
-                _c_embed = self.config.fixnorm_r_value * tf.nn.l2_normalize(_c_embed, 1)#-- fixnorm
+                _c_embed = self.config.fixnorm_r_value * tf.nn.l2_normalize(_c_embed, 1)#-- fixnorm - as per author's code
             _lex_logit = self.lexical_to_logits.forward(_c_embed, input_is_3d=multi_step)
         else:
             pass
@@ -310,11 +309,9 @@ class Predictor(object):
         else:
             assert(False, 'Unknown output activation function "%s"' % self.config.output_hidden_activation)
 
-        #Apply normalise if it is enabled
+        #Apply normalise if fixnorm is enabled
         if self.config.fixnorm:
-            #self.norm=LayerNormLayer(self.config.embedding_size)
-            hidden=self.config.fixnorm_r_value * tf.nn.l2_normalize(hidden,1) #-- fixnorm
-            #hidden=lexical_model.project_embeds(hidden)
+            hidden=self.config.fixnorm_r_value * tf.nn.l2_normalize(hidden,1) #-- fixnorm - as per author's code
 
         #egarza - modified the name to logits step to use it later in conjuction with lex
         with tf.name_scope("hidden_to_logits"):
