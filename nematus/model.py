@@ -256,9 +256,9 @@ class Predictor(object):
         
         if config.lexical:
             with tf.name_scope("lexical_context_to_hidden"):
-                self.lexical_to_logits = FeedForwardLayer(
-                                      in_size=config.state_size,
-                                      out_size=config.target_vocab_size,
+                self.lexical_to_hidden = FeedForwardLayer(
+                                      in_size=config.embedding_size,
+                                      out_size=config.embedding_size,
                                       batch_size=batch_size,
                                       non_linearity=lambda y: y,
                                       use_layer_norm=config.use_layer_norm,
@@ -294,7 +294,7 @@ class Predictor(object):
             _c_embed = lex_model.lexical_model.forward(_c_embed, input_is_3d=multi_step) + _c_embed
             if self.config.fixnorm:
                 _c_embed = self.config.fixnorm_r_value * tf.nn.l2_normalize(_c_embed, 1)#-- fixnorm - as per author's code
-            _lex_logit = _c_embed #self.lexical_to_logits.forward(_c_embed, input_is_3d=multi_step)
+            _lex_logit = self.lexical_to_hidden.forward(_c_embed, input_is_3d=multi_step)
             hidden = hidden_emb + hidden_state + hidden_att_ctx + _lex_logit
         else:
             hidden = hidden_emb + hidden_state + hidden_att_ctx
