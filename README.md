@@ -4,5 +4,5 @@ Modified version of the Nematus framework (https://github.com/EdinburghNLP/nemat
 
 ## Options
 
- --lexical  :  To add train using the Lexical model__
- --bilingual_pretrain  :  To add train using the Lexical model__
+ --lexical  :  To add train using the Lexical model <br />
+ --bilingual_pretrain  :  To add train using the Lexical model <br />
