@@ -288,16 +288,24 @@ class Predictor(object):
         with tf.name_scope("attended_context_to_hidden"):
             hidden_att_ctx = self.att_ctx_to_hidden.forward(attended_states,input_is_3d=multi_step)
     
-        #egarza - add lexical model to logits
-        if lex_model:
-            _c_embed=c_embed
+    #egarza - add lexical model to logits
+    if lex_model:
+        _c_embed=c_embed
             _c_embed = lex_model.lexical_model.forward(_c_embed, input_is_3d=multi_step) + _c_embed
             if self.config.fixnorm:
+                hidden_emb = self.config.fixnorm_r_value * tf.nn.l2_normalize(hidden_emb, 1)#-- fixnorm - as per author's code
+                hidden_state = self.config.fixnorm_r_value * tf.nn.l2_normalize(hidden_state, 1)#-- fixnorm - as per author's code
+                hidden_att_ctx = self.config.fixnorm_r_value * tf.nn.l2_normalize(hidden_att_ctx, 1)#-- fixnorm - as per author's code
                 _c_embed = self.config.fixnorm_r_value * tf.nn.l2_normalize(_c_embed, 1)#-- fixnorm - as per author's code
-            _lex_logit = self.lexical_to_logits.forward(_c_embed, input_is_3d=multi_step)
+
+            _lex_logit = self.lexical_to_hidden.forward(_c_embed, input_is_3d=multi_step)
+            hidden = hidden_emb + hidden_state + hidden_att_ctx + _lex_logit
         else:
-            pass
-        hidden = hidden_emb + hidden_state + hidden_att_ctx
+            if self.config.fixnorm:
+                hidden_emb = self.config.fixnorm_r_value * tf.nn.l2_normalize(hidden_emb, 1)#-- fixnorm - as per author's code
+                hidden_state = self.config.fixnorm_r_value * tf.nn.l2_normalize(hidden_state, 1)#-- fixnorm - as per author's code
+                hidden_att_ctx = self.config.fixnorm_r_value * tf.nn.l2_normalize(hidden_att_ctx, 1)#-- fixnorm - as per author's code
+            hidden = hidden_emb + hidden_state + hidden_att_ctx
         if self.config.output_hidden_activation == 'tanh':
             hidden = tf.tanh(hidden)
         elif self.config.output_hidden_activation == 'relu':
@@ -308,22 +316,22 @@ class Predictor(object):
             pass
         else:
             assert(False, 'Unknown output activation function "%s"' % self.config.output_hidden_activation)
-
+        
         #Apply normalise if fixnorm is enabled
-        if self.config.fixnorm:
-            hidden=self.config.fixnorm_r_value * tf.nn.l2_normalize(hidden,1) #-- fixnorm - as per author's code
-
+        #if self.config.fixnorm:
+        #hidden=self.config.fixnorm_r_value * tf.nn.l2_normalize(hidden,1) #-- fixnorm - as per author's code
+        
         #egarza - modified the name to logits step to use it later in conjuction with lex
         with tf.name_scope("hidden_to_logits"):
             logits_step = self.hidden_to_logits.forward(hidden, input_is_3d=multi_step)
-
+        
         #egarza - lexical
-        if lex_model:
-            #rnn + lex
-            logits = logits_step +_lex_logit
-        else:
-            logits = logits_step
-
+        #if lex_model:
+        #rnn + lex
+        #logits = logits_step +_lex_logit
+        #else:
+        logits = logits_step
+        
         return logits
 
 
