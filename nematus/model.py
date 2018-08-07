@@ -256,9 +256,9 @@ class Predictor(object):
         
         if config.lexical:
             with tf.name_scope("lexical_context_to_hidden"):
-                self.lexical_to_logits = FeedForwardLayer(
+                self.lexical_to_hidden = FeedForwardLayer(
                                       in_size=config.state_size,
-                                      out_size=config.target_vocab_size,
+                                      out_size=config.embedding_size,
                                       batch_size=batch_size,
                                       non_linearity=lambda y: y,
                                       use_layer_norm=config.use_layer_norm,
@@ -298,7 +298,7 @@ class Predictor(object):
                 hidden_att_ctx = self.config.fixnorm_r_value * tf.nn.l2_normalize(hidden_att_ctx, 1)#-- fixnorm - as per author's code
                 _c_embed = self.config.fixnorm_r_value * tf.nn.l2_normalize(_c_embed, 1)#-- fixnorm - as per author's code
 
-            _lex_logit = self.lexical_to_hidden.forward(_c_embed, input_is_3d=multi_step)
+            _lex_logit = self.lexical_to_hidden.forward(_c_embed, input_is_3d=multi_step, W=lex_model.lex_v)
             hidden = hidden_emb + hidden_state + hidden_att_ctx + _lex_logit
         else:
             if self.config.fixnorm:
@@ -330,7 +330,7 @@ class Predictor(object):
             #rnn + lex
             #logits = logits_step +_lex_logit
             #else:
-            logits = logits_step
+        logits = logits_step
             
         return logits
 
@@ -414,7 +414,9 @@ class LexicalModel(object):
                                                    non_linearity=tf.nn.tanh)
         self.src_embs=src_embs
         self.config=config
-        #self.lex_embedding = embed_norm * tf.nn.l2_normalize(self.lex_v, 0) -- fixnorm
+        self.lex_v = tf.get_variable('lex_v',shape=[config.embedding_size, config.state_size], dtype=tf.float32)
+        if config.fixnorm:
+                self.lex_v = config.fixnorm_r_value * tf.nn.l2_normalize(self.lex_v, 0) #-- fixnorm
 
 #    def matmul3d(self, x3d, matrix):
 #        shape = tf.shape(x3d)

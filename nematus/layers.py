@@ -49,7 +49,9 @@ class FeedForwardLayer(object):
             self.dropout_mask = dropout_input(ones)
 
 
-    def forward(self, x, input_is_3d=False):
+    def forward(self, x, W = None, input_is_3d=False):
+        if W is not None:
+            self.W = W
         x = apply_dropout_mask(x, self.dropout_mask, input_is_3d)
         if input_is_3d:
             y = matmul3d(x, self.W) + self.b
