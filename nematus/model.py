@@ -254,16 +254,6 @@ class Predictor(object):
                                   use_layer_norm=config.use_layer_norm,
                                   dropout_input=dropout_hidden)
         
-        if config.lexical:
-            with tf.name_scope("lexical_context_to_hidden"):
-                self.lexical_to_hidden = FeedForwardLayer(
-                                      in_size=config.state_size,
-                                      out_size=config.embedding_size,
-                                      batch_size=batch_size,
-                                      non_linearity=lambda y: y,
-                                      use_layer_norm=config.use_layer_norm,
-                                      dropout_input=dropout_hidden)
-        
         if config.output_hidden_activation == 'prelu':
             with tf.name_scope("hidden_prelu"):
                 self.hidden_prelu = PReLU(in_size=config.embedding_size)
@@ -298,7 +288,7 @@ class Predictor(object):
                 hidden_att_ctx = self.config.fixnorm_r_value * tf.nn.l2_normalize(hidden_att_ctx, 1)#-- fixnorm - as per author's code
                 _c_embed = self.config.fixnorm_r_value * tf.nn.l2_normalize(_c_embed, 1)#-- fixnorm - as per author's code
 
-            _lex_logit = self.lexical_to_hidden.forward(_c_embed, input_is_3d=multi_step, W=lex_model.lex_v)
+            _lex_logit = lex_model.lexical_to_hidden.forward(_c_embed, input_is_3d=multi_step)
             hidden = hidden_emb + hidden_state + hidden_att_ctx + _lex_logit
         else:
             if self.config.fixnorm:
@@ -338,13 +328,14 @@ class Predictor(object):
 class Encoder(object):
     def __init__(self, config, batch_size, dropout_source, dropout_embedding,
                  dropout_hidden):
-
+        self.config=config
         self.dropout_source = dropout_source
-        
+        #egarza-fixnorm
         with tf.name_scope("embedding"):
             self.emb_layer = EmbeddingLayerWithFactors(
                 config.source_vocab_sizes,
-                config.dim_per_factor)
+                config.dim_per_factor,
+                norm=config.fixnorm)
 
         with tf.name_scope("forward-stack"):
             self.forward_encoder = GRUStack(
@@ -406,25 +397,38 @@ class Encoder(object):
 class LexicalModel(object):
     def __init__(self, config, batch_size, dropout_source, dropout_embedding,
                  dropout_hidden, src_embs):
+        self.src_embs=src_embs
+        self.config=config
+        self.lex_v = tf.get_variable('lex_v',shape=[config.embedding_size, config.state_size], dtype=tf.float32)
         
+        self.lex_embedding = config.fixnorm_r_value * tf.nn.l2_normalize(self.lex_v, 0)
+        
+        if config.fixnorm:
+            self.lex_v = config.fixnorm_r_value * tf.nn.l2_normalize(self.lex_v, 0) #-- fixnorm
+                
         with tf.name_scope("lexical_model"):
             self.lexical_model =  FeedForwardLayer(in_size=config.embedding_size,
                                                    out_size=config.state_size,
                                                    batch_size=batch_size,
                                                    non_linearity=tf.nn.tanh)
-        self.src_embs=src_embs
-        self.config=config
-        self.lex_v = tf.get_variable('lex_v',shape=[config.embedding_size, config.state_size], dtype=tf.float32)
-        if config.fixnorm:
-                self.lex_v = config.fixnorm_r_value * tf.nn.l2_normalize(self.lex_v, 0) #-- fixnorm
+        
+        with tf.name_scope("lexical_context_to_hidden"):
+            self.lexical_to_hidden = FeedForwardLayer(
+                                                  in_size=config.state_size,
+                                                  out_size=config.embedding_size,
+                                                  batch_size=batch_size,
+                                                  non_linearity=lambda y: y,
+                                                  use_layer_norm=config.use_layer_norm,
+                                                  W=self.lex_v,
+                                                  dropout_input=dropout_hidden)
 
-#    def matmul3d(self, x3d, matrix):
-#        shape = tf.shape(x3d)
-#        mat_shape = tf.shape(matrix)
-#        x2d = tf.reshape(x3d, [shape[0]*shape[1], shape[2]])
-#        result2d = tf.matmul(x2d, matrix)
-#        result3d = tf.reshape(result2d, [shape[0], shape[1], mat_shape[1]])
-#        return result3d
+    def matmul3d(self, x3d, matrix):
+        shape = tf.shape(x3d)
+        mat_shape = tf.shape(matrix)
+        x2d = tf.reshape(x3d, [shape[0]*shape[1], shape[2]])
+        result2d = tf.matmul(x2d, matrix)
+        result3d = tf.reshape(result2d, [shape[0], shape[1], mat_shape[1]])
+        return result3d
 
     def calc_c_embed(self, attention_mtx):
         attended = attention_mtx
@@ -442,7 +446,7 @@ class LexicalModel(object):
         lex_inputs = tf.tanh(x)
         lexicons = self.lexical_model.forward(lex_inputs, input_is_3d=True) + lex_inputs
         #lexicons = project_embeds(lexicons)   --- fixnorm (might not be necessary)
-        #lexicons = tf.matmul(lexicons, self.lex_embedding) + self.lex_bias -- fixnorm
+        lexicons = tf.matmul(lexicons, self.lex_embedding) + self.lex_bias -- fixnorm
         
         if input_is_3d:
             lexicons = matmul3d(lexicons, self.lex_v) + self.lex_bias
