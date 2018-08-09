@@ -433,12 +433,8 @@ class LexicalModel(object):
         lexicons = self.lexical_model.forward(lex_inputs, input_is_3d=True) + lex_inputs
         #lexicons = project_embeds(lexicons)   --- fixnorm (might not be necessary)
         #lexicons = tf.matmul(lexicons, self.lex_embedding) + self.lex_bias -- fixnorm
-        
-        if input_is_3d:
-            lexicons = matmul3d(lexicons, self.lex_v) + self.lex_bias
-        else:
-            lexicons = tf.matmul(lexicons, self.lex_v) + self.lex_bias
-        
+
+        lexicons=self.lexical_to_hidden.forward(lexicons, input_is_3d=True)
         self.lexicons = tf.nn.softmax(lexicons)
         return self.lexicons
 
@@ -516,7 +512,7 @@ class StandardModel(object):
         if config.lexical:
             logging.info('Lexical model enabled...')
             self.lexical_model = LexicalModel(config, batch_size, dropout_source, dropout_embedding, dropout_hidden, src_embs)
-            #self.lexicons = self.lexical_model.calc_lexicons(src_embs, input_is_3d=True)
+            self.lexicons = self.lexical_model.calc_lexicons(src_embs, input_is_3d=True)
         with tf.name_scope("decoder"):
             self.decoder = Decoder(config, ctx, self.x_mask, dropout_target,
                                    dropout_embedding, dropout_hidden)
