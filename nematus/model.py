@@ -399,22 +399,31 @@ class LexicalModel(object):
     def __init__(self, config, batch_size, dropout_source, dropout_embedding,
                  dropout_hidden, src_embs):
         
-        with tf.name_scope("lexical_model"):
-            self.lexical_model =  FeedForwardLayer(in_size=config.embedding_size,
-                                                   out_size=config.embedding_size,
-                                                   batch_size=batch_size,
-                                                   non_linearity=tf.nn.tanh)
         self.src_embs=src_embs
         self.config=config
-        #self.lex_embedding = embed_norm * tf.nn.l2_normalize(self.lex_v, 0) -- fixnorm
-
-#    def matmul3d(self, x3d, matrix):
-#        shape = tf.shape(x3d)
-#        mat_shape = tf.shape(matrix)
-#        x2d = tf.reshape(x3d, [shape[0]*shape[1], shape[2]])
-#        result2d = tf.matmul(x2d, matrix)
-#        result3d = tf.reshape(result2d, [shape[0], shape[1], mat_shape[1]])
-#        return result3d
+        self.lex_v = tf.get_variable('lex_v',shape=[config.embedding_size, config.state_size], dtype=tf.float32)
+        
+        self.lex_embedding = config.fixnorm_r_value * tf.nn.l2_normalize(self.lex_v, 0)
+        
+        if config.fixnorm:
+            self.lex_v = config.fixnorm_r_value * tf.nn.l2_normalize(self.lex_v, 0) #-- fixnorm
+        
+        with tf.name_scope("lexical_model"):
+            self.lexical_model =  FeedForwardLayer(in_size=config.embedding_size,
+                                                   out_size=config.state_size,
+                                                   batch_size=batch_size,
+                                                   non_linearity=tf.nn.tanh)
+        
+        with tf.name_scope("lexical_context_to_hidden"):
+            self.lexical_to_hidden = FeedForwardLayer(
+                                                      in_size=config.state_size,
+                                                      out_size=config.embedding_size,
+                                                      batch_size=batch_size,
+                                                      non_linearity=lambda y: y,
+                                                      use_layer_norm=config.use_layer_norm,
+                                                      W=self.lex_v,
+                                                      dropout_input=dropout_hidden)
+        
 
     def calc_c_embed(self, attention_mtx):
         attended = attention_mtx
