@@ -202,7 +202,7 @@ class Decoder(object):
         states, attended_states, attention_mtx = RecurrentLayer(
                                     initial_state=init_state_att_ctx,
                                     step_fn=step_fn).forward((gates_x, proposal_x, attn_x))
-        self.attention_mtx=attention_mtx
+        
         if self.high_gru_stack != None:
             states = self.high_gru_stack.forward(
                 states,
@@ -244,15 +244,6 @@ class Predictor(object):
                                     non_linearity=lambda y: y,
                                     use_layer_norm=config.use_layer_norm,
                                     dropout_input=dropout_hidden)
-        
-        with tf.name_scope("attended_context_to_hidden"):
-            self.att_ctx_to_hidden = FeedForwardLayer(
-                                  in_size=2*config.state_size,
-                                  out_size=config.embedding_size,
-                                  batch_size=batch_size,
-                                  non_linearity=lambda y: y,
-                                  use_layer_norm=config.use_layer_norm,
-                                  dropout_input=dropout_hidden)
         
         if config.lexical:
             with tf.name_scope("lexical_context_to_hidden"):
@@ -431,6 +422,7 @@ class LexicalModel(object):
         c_embed = tf.multiply(embeds, attended)
         c_embed = tf.reduce_sum(c_embed, 1)
         c_embed = tf.tanh(c_embed)
+        tf.transpose(c_embed, [1, 0, 2])
         return c_embed
     
     def project_embeds(x, axis=1): ##--- fixnorm (might not be necessary) ##
