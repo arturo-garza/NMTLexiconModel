@@ -420,9 +420,9 @@ class LexicalModel(object):
         attended = attention_mtx
         embeds = self.src_embs
         c_embed = tf.multiply(embeds, attended)
-        c_embed = tf.reduce_sum(c_embed, 1)
+        c_embed = tf.reduce_sum(c_embed, axis=0, keep_dims=False)
+        #c_embed = tf.reduce_sum(c_embed, 1)
         c_embed = tf.tanh(c_embed)
-        tf.transpose(c_embed, [1, 0, 2])
         return c_embed
     
     def project_embeds(x, axis=1): ##--- fixnorm (might not be necessary) ##
