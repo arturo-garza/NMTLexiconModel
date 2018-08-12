@@ -522,7 +522,7 @@ class AttentionStep(object):
         
         #egarza - calculate c_embeds
         scores_out = tf.nn.softmax(scores)
-        scores_out =  tf.multiply(tf.expand_dims(scores, axis=2), src_embs)
+        scores_out =  tf.multiply(tf.expand_dims(scores_out, axis=2), src_embs)
         scores_out = tf.reduce_sum(scores_out, axis=0, keep_dims=False)
         #scores_out = tf.nn.softmax(scores_out)
 
