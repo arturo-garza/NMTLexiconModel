@@ -519,6 +519,8 @@ class AttentionStep(object):
         scores = tf.exp(scores)
         scores *= self.context_mask
         scores = scores / tf.reduce_sum(scores, axis=0, keep_dims=True)
+        
+        #egarza - calculate c_embeds
         scores_out = src_embs * tf.expand_dims(scores, axis=2)
         scores_out = tf.reduce_sum(scores_out, axis=0, keep_dims=False)
         #scores_out = tf.nn.softmax(scores_out)
