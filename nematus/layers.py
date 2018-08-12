@@ -501,7 +501,7 @@ class AttentionStep(object):
             self.hidden_from_context = \
                 self.hidden_context_norm.forward(self.hidden_from_context, input_is_3d=True)
 
-    def forward(self, prev_state):
+    def forward(self, prev_state, src_embs):
         prev_state = apply_dropout_mask(prev_state,
                                         self.dropout_mask_state_to_hidden)
         hidden_from_state = tf.matmul(prev_state, self.state_to_hidden)
@@ -519,8 +519,9 @@ class AttentionStep(object):
         scores = tf.exp(scores)
         scores *= self.context_mask
         scores = scores / tf.reduce_sum(scores, axis=0, keep_dims=True)
-        scores_out = tf.expand_dims(scores, axis=2)
-        scores_out = tf.nn.softmax(scores_out)
+        scores_out = src_embs * tf.expand_dims(scores, axis=2)
+        scores_out = tf.reduce_sum(scores_out, axis=0, keep_dims=False)
+        #scores_out = tf.nn.softmax(scores_out)
 
         attention_context = self.context * tf.expand_dims(scores, axis=2)
         attention_context = tf.reduce_sum(attention_context, axis=0, keep_dims=False)

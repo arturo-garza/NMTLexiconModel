@@ -10,8 +10,8 @@ import inference
 
 class Decoder(object):
     def __init__(self, config, context, x_mask, dropout_target,
-                 dropout_embedding, dropout_hidden):
-
+                 dropout_embedding, dropout_hidden, src_embs):
+        self.src_embs=src_embs
         self.dropout_target = dropout_target
         batch_size = tf.shape(x_mask)[1]
 
@@ -176,11 +176,11 @@ class Decoder(object):
                             paddings=[[1,0],[0,0],[0,0]]) # prepend zeros
         init_attended_context = tf.zeros([tf.shape(self.init_state)[0], self.state_size*2])
 
-        attention_out = tf.placeholder(dtype=tf.float32, shape = (None, None, 1))
+        attention_out = tf.placeholder(dtype=tf.float32, shape = (None, None))#, 1))
         init_state_att_ctx = (self.init_state, init_attended_context, attention_out)
 
         #init_state_att_ctx = (self.init_state, init_attended_context)
-        attn_x = tf.placeholder(dtype=tf.float32, shape = (None, None, 1))
+        attn_x = tf.placeholder(dtype=tf.float32, shape = (None, None))#, 1))
         gates_x, proposal_x = self.grustep1.precompute_from_x(y_embs)
         def step_fn(prev, x):
             prev_state = prev[0]
@@ -193,8 +193,7 @@ class Decoder(object):
                         prev_state,
                         gates_x=gates_x2d,
                         proposal_x=proposal_x2d)
-            att_ctx, scores = self.attstep.forward(state)
-            self.attention_mtx = scores
+            att_ctx, scores = self.attstep.forward(state, self.src_embs)
             self.grustep2.forward(state, att_ctx)
             #TODO: write att_ctx to tensorArray instead of having it as output of scan?
             return (state, att_ctx, scores)
@@ -202,7 +201,7 @@ class Decoder(object):
         states, attended_states, attention_mtx = RecurrentLayer(
                                     initial_state=init_state_att_ctx,
                                     step_fn=step_fn).forward((gates_x, proposal_x, attn_x))
-        
+                
         if self.high_gru_stack != None:
             states = self.high_gru_stack.forward(
                 states,
@@ -210,7 +209,10 @@ class Decoder(object):
         
         # egarzaj - Lexical model
         if self.lexical:
-            c_embed = lexical_model.calc_c_embed(attention_mtx)
+            #c_embed =  tf.multiply(tf.expand_dims(attention_mtx, axis=2), self.src_embs)
+            #c_embed =  tf.multiply(attention_mtx, self.src_embs)
+            #c_embed = tf.reduce_sum(c_embed, axis=0, keep_dims=False)
+            c_embed = tf.tanh(attention_mtx)
             logits = self.predictor.get_logits(y_embs, states, attended_states, lexical_model, c_embed, multi_step=True)
         else:
             logits = self.predictor.get_logits(y_embs, states, attended_states, multi_step=True)
@@ -248,7 +250,7 @@ class Predictor(object):
         if config.lexical:
             with tf.name_scope("lexical_context_to_hidden"):
                 self.lexical_to_hidden = FeedForwardLayer(
-                                      in_size=config.embedding_size,
+                                      in_size=config.state_size,
                                       out_size=config.embedding_size,
                                       batch_size=batch_size,
                                       non_linearity=lambda y: y,
@@ -282,11 +284,12 @@ class Predictor(object):
         #egarza - add lexical model to logits
         if lex_model:
             _c_embed=c_embed
-            _c_embed = lex_model.lexical_model.forward(_c_embed, input_is_3d=multi_step) + _c_embed
+            _c_embed = lex_model.lexical_model.forward(_c_embed, input_is_3d=multi_step)+_c_embed
             if self.config.fixnorm:
                 _c_embed = self.config.fixnorm_r_value * tf.nn.l2_normalize(_c_embed, 1)#-- fixnorm - as per author's code
-            _lex_logit = self.lexical_to_hidden.forward(_c_embed, input_is_3d=multi_step)
-            hidden = hidden_emb + hidden_state + hidden_att_ctx + _lex_logit
+            with tf.name_scope("lexical_context_to_hidden"):
+                hidden_lex = self.lexical_to_hidden.forward(_c_embed, input_is_3d=multi_step)
+            hidden = hidden_emb + hidden_state + hidden_att_ctx + hidden_lex
         else:
             hidden = hidden_emb + hidden_state + hidden_att_ctx
         if self.config.output_hidden_activation == 'tanh':
@@ -407,12 +410,12 @@ class LexicalModel(object):
         
         with tf.name_scope("lexical_context_to_hidden"):
             self.lexical_to_hidden = FeedForwardLayer(
-                                                      in_size=config.state_size,
-                                                      out_size=config.embedding_size,
+                                                      in_size=config.embedding_size,
+                                                      out_size=config.state_size,
                                                       batch_size=batch_size,
-                                                      non_linearity=lambda y: y,
+                                                      #non_linearity=lambda y: y,
                                                       use_layer_norm=config.use_layer_norm,
-                                                      W=self.lex_v,
+                                                      #W=self.lex_v,
                                                       dropout_input=dropout_hidden)
         
 
@@ -516,7 +519,7 @@ class StandardModel(object):
             self.lexicons = self.lexical_model.calc_lexicons(src_embs, input_is_3d=True)
         with tf.name_scope("decoder"):
             self.decoder = Decoder(config, ctx, self.x_mask, dropout_target,
-                                   dropout_embedding, dropout_hidden)
+                                   dropout_embedding, dropout_hidden, src_embs)
             #egarza - lexical
             if self.lexical:
                 logging.info('Calling decoder with lexical model...')
