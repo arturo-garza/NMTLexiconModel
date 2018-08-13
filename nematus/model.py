@@ -146,7 +146,7 @@ class Decoder(object):
                         prev_high_states, base_state, context=att_ctx)
             rnn_logits, lexical_logits = self.predictor.get_logits(prev_emb, output, att_ctx,
                                                multi_step=False)
-            logits = rnn_logits#, lexical_logits
+            logits = rnn_logits# lexical_logits
             new_y = tf.multinomial(logits, num_samples=1)
             new_y = tf.cast(new_y, dtype=tf.int32)
             new_y = tf.squeeze(new_y, axis=1)
@@ -283,9 +283,6 @@ class Predictor(object):
                 _c_embed = self.config.fixnorm_r_value * tf.nn.l2_normalize(_c_embed, 0)#-- fixnorm - as per author's code
             with tf.name_scope("lexical_context_to_logits"):
                 lex_logits = lex_model.lexical_to_logits.forward(_c_embed, input_is_3d=multi_step)
-            #hidden = hidden_emb + hidden_state + hidden_att_ctx
-            #hidden = 0.999*hidden + 0.001*hidden_lex
-
         hidden = hidden_emb + hidden_state + hidden_att_ctx
 
         if self.config.output_hidden_activation == 'tanh':
@@ -533,10 +530,11 @@ class StandardModel(object):
             self.loss_per_sentence = self.loss_layer.forward(self.logits)
             self.lex_loss_per_sentence = self.lex_loss_layer.forward(self.lex_logits)
             
-            self.loss= self.loss_per_sentence*0.99 + 0.01*self.lex_loss_per_sentence
-            self.mean_loss = tf.reduce_mean(self.loss, keep_dims=False)
+            self.mean_loss = tf.reduce_mean(self.loss_per_sentence, keep_dims=False)
+            self.lex_mean_loss = tf.reduce_mean(self.lex_loss_per_sentence, keep_dims=False)
             #self.mean_loss = tf.reduce_mean(self.loss_per_sentence, keep_dims=False)
-            self.objective = self.mean_loss
+            #egarza - RNN and Lexical combined loss
+            self.objective = 0.99*self.mean_loss + 0.01*self.lex_mean_loss
         
             self.l2_loss = tf.constant(0.0, dtype=tf.float32)
             if config.decay_c > 0.0:
