@@ -293,7 +293,7 @@ class Predictor(object):
             with tf.name_scope("lexical_context_to_hidden"):
                 hidden_lex = self.lexical_to_hidden.forward(_c_embed, input_is_3d=multi_step)
             hidden = hidden_emb + hidden_state + hidden_att_ctx
-            hidden = 0.99*hidden + 0.01*hidden_lex
+            hidden = 0.999*hidden + 0.001*hidden_lex
         else:
             hidden = hidden_emb + hidden_state + hidden_att_ctx
 
