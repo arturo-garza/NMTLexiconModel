@@ -250,16 +250,6 @@ class Predictor(object):
                                     use_layer_norm=config.use_layer_norm,
                                     dropout_input=dropout_hidden)
         
-        if config.lexical:
-            with tf.name_scope("lexical_context_to_hidden"):
-                self.lexical_to_hidden = FeedForwardLayer(
-                                      in_size=config.state_size,
-                                      out_size=config.embedding_size,
-                                      batch_size=batch_size,
-                                      non_linearity=lambda y: y,
-                                      use_layer_norm=config.use_layer_norm,
-                                      dropout_input=dropout_hidden)
-        
         if config.output_hidden_activation == 'prelu':
             with tf.name_scope("hidden_prelu"):
                 self.hidden_prelu = PReLU(in_size=config.embedding_size)
@@ -290,12 +280,12 @@ class Predictor(object):
             _c_embed = lex_model.lexical_model.forward(_c_embed, input_is_3d=multi_step)+_c_embed
             if self.config.fixnorm:
                 _c_embed = self.config.fixnorm_r_value * tf.nn.l2_normalize(_c_embed, 0)#-- fixnorm - as per author's code
-            with tf.name_scope("lexical_context_to_hidden"):
-                hidden_lex = self.lexical_to_hidden.forward(_c_embed, input_is_3d=multi_step)
-            hidden = hidden_emb + hidden_state + hidden_att_ctx
-            hidden = 0.999*hidden + 0.001*hidden_lex
-        else:
-            hidden = hidden_emb + hidden_state + hidden_att_ctx
+            with tf.name_scope("lexical_context_to_logits"):
+                lex_logits = lex_model.lexical_to_logits.forward(_c_embed, input_is_3d=multi_step)
+            #hidden = hidden_emb + hidden_state + hidden_att_ctx
+            #hidden = 0.999*hidden + 0.001*hidden_lex
+
+        hidden = hidden_emb + hidden_state + hidden_att_ctx
 
         if self.config.output_hidden_activation == 'tanh':
             hidden = tf.tanh(hidden)
@@ -314,7 +304,7 @@ class Predictor(object):
 
         #egarza - modified the name to logits step to use it later in conjuction with lex
         with tf.name_scope("hidden_to_logits"):
-            logits_step = self.hidden_to_logits.forward(hidden, input_is_3d=multi_step)
+            logits = self.hidden_to_logits.forward(hidden, input_is_3d=multi_step)
 
         #egarza - lexical
         #if lex_model:
@@ -322,9 +312,10 @@ class Predictor(object):
             #Create fixed weight to validate if less weight in the lex model improves
             #logits = 0.99*logits_step + 0.01*hidden_lex
         #else:
-        logits = logits_step
-
-        return logits
+        if lex_model:
+            return logits, lex_logits
+        else:
+            return logits, None
 
 
 class Encoder(object):
@@ -414,10 +405,10 @@ class LexicalModel(object):
                                                    batch_size=batch_size,
                                                    non_linearity=tf.nn.tanh)
         
-        with tf.name_scope("lexical_context_to_hidden"):
-            self.lexical_to_hidden = FeedForwardLayer(
+        with tf.name_scope("lexical_context_to_logits"):
+            self.lexical_to_logits = FeedForwardLayer(
                                                       in_size=config.embedding_size,
-                                                      out_size=config.state_size,
+                                                      out_size=config.target_vocab_size,
                                                       batch_size=batch_size,
                                                       #non_linearity=lambda y: y,
                                                       use_layer_norm=config.use_layer_norm,
@@ -444,7 +435,7 @@ class LexicalModel(object):
         #lexicons = project_embeds(lexicons)   --- fixnorm (might not be necessary)
         #lexicons = tf.matmul(lexicons, self.lex_embedding) + self.lex_bias -- fixnorm
 
-        lexicons=self.lexical_to_hidden.forward(lexicons, input_is_3d=True)
+        lexicons=self.lexical_to_logits.forward(lexicons, input_is_3d=True)
         self.lexicons = tf.nn.softmax(lexicons)
         return self.lexicons
 
@@ -529,14 +520,21 @@ class StandardModel(object):
             #egarza - lexical
             if self.lexical:
                 logging.info('Calling decoder with lexical model...')
-                self.logits = self.decoder.score(self.y, self.lexical_model)
+                self.logits, self.lex_logits = self.decoder.score(self.y, self.lexical_model)
             else:
-                self.logits = self.decoder.score(self.y)
+                self.logits, _ = self.decoder.score(self.y)
 
         with tf.name_scope("loss"):
             self.loss_layer = Masked_cross_entropy_loss(self.y, self.y_mask)
+            self.lex_loss_layer = Masked_cross_entropy_loss(self.y, self.y_mask)
+            
+            
             self.loss_per_sentence = self.loss_layer.forward(self.logits)
-            self.mean_loss = tf.reduce_mean(self.loss_per_sentence, keep_dims=False)
+            self.lex_loss_per_sentence = self.lex_loss_layer.forward(self.lex_logits)
+            
+            self.loss= self.loss_per_sentence*0.99 + 0.01*self.lex_loss_per_sentence
+            self.mean_loss = tf.reduce_mean(self.loss, keep_dims=False)
+            #self.mean_loss = tf.reduce_mean(self.loss_per_sentence, keep_dims=False)
             self.objective = self.mean_loss
         
             self.l2_loss = tf.constant(0.0, dtype=tf.float32)
