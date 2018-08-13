@@ -321,7 +321,7 @@ class Predictor(object):
         if lex_model:
             #rnn + lex
             #Create fixed weight to validate if less weight in the lex model improves
-            logits = 0.9*logits_step + 0.1*hidden_lex
+            logits = 0.99*logits_step + 0.01*hidden_lex
         else:
             logits = logits_step
 
