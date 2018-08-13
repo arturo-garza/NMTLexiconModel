@@ -251,7 +251,7 @@ class Predictor(object):
             with tf.name_scope("lexical_context_to_hidden"):
                 self.lexical_to_hidden = FeedForwardLayer(
                                       in_size=config.state_size,
-                                      out_size=config.embedding_size,
+                                      out_size=config.target_vocab_size,
                                       batch_size=batch_size,
                                       non_linearity=lambda y: y,
                                       use_layer_norm=config.use_layer_norm,
@@ -286,12 +286,15 @@ class Predictor(object):
             _c_embed=c_embed
             _c_embed = lex_model.lexical_model.forward(_c_embed, input_is_3d=multi_step)+_c_embed
             if self.config.fixnorm:
-                _c_embed = self.config.fixnorm_r_value * tf.nn.l2_normalize(_c_embed, 1)#-- fixnorm - as per author's code
+                _c_embed = self.config.fixnorm_r_value * tf.nn.l2_normalize(_c_embed, 0)#-- fixnorm - as per author's code
             with tf.name_scope("lexical_context_to_hidden"):
                 hidden_lex = self.lexical_to_hidden.forward(_c_embed, input_is_3d=multi_step)
-            hidden = hidden_emb + hidden_state + hidden_att_ctx + hidden_lex
+            #hidden = hidden_emb + hidden_state + hidden_att_ctx + hidden_lex
         else:
-            hidden = hidden_emb + hidden_state + hidden_att_ctx
+            pass
+
+        hidden = hidden_emb + hidden_state + hidden_att_ctx
+
         if self.config.output_hidden_activation == 'tanh':
             hidden = tf.tanh(hidden)
         elif self.config.output_hidden_activation == 'relu':
@@ -312,11 +315,12 @@ class Predictor(object):
             logits_step = self.hidden_to_logits.forward(hidden, input_is_3d=multi_step)
 
         #egarza - lexical
-        #if lex_model:
+        if lex_model:
             #rnn + lex
-            #logits = logits_step +_lex_logit
-        #else:
-        logits = logits_step
+            #Create fixed weight to validate if less weight in the lex model improves
+            logits = 0.9*logits_step + 0.1*hidden_lex
+        else:
+            logits = logits_step
 
         return logits
 
