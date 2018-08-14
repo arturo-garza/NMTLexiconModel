@@ -144,7 +144,7 @@ class Decoder(object):
                 else:
                     output, high_states = self.high_gru_stack.forward_single(
                         prev_high_states, base_state, context=att_ctx)
-            rnn_logits, lexical_logits = self.predictor.get_logits(prev_emb, output, att_ctx,
+            rnn_logits = self.predictor.get_logits(prev_emb, output, att_ctx,
                                                multi_step=False)
             logits = rnn_logits# lexical_logits
             new_y = tf.multinomial(logits, num_samples=1)
@@ -279,8 +279,8 @@ class Predictor(object):
         if lex_model:
             _c_embed=c_embed
             _c_embed = lex_model.lexical_model.forward(_c_embed, input_is_3d=multi_step)+_c_embed
-            if self.config.fixnorm:
-                _c_embed = self.config.fixnorm_r_value * tf.nn.l2_normalize(_c_embed, 0)#-- fixnorm - as per author's code
+            #if self.config.fixnorm:
+            #_c_embed = self.config.fixnorm_r_value * tf.nn.l2_normalize(_c_embed, 0)#-- fixnorm - as per author's code
             with tf.name_scope("lexical_context_to_logits"):
                 lex_logits = lex_model.lexical_to_logits.forward(_c_embed, input_is_3d=multi_step)
                     
