@@ -98,9 +98,12 @@ def construct_beam_search_functions(models, beam_size):
                 else:
                     stack_output, high_states[j] = d.high_gru_stack.forward_single(
                         prev_high_states[j], base_states[j], context=att_ctx)
-            logits = d.predictor.get_logits(prev_embs[j], stack_output,
+            logits, lex_logits = d.predictor.get_logits(prev_embs[j], stack_output,
                                             att_ctx, multi_step=False)
             log_probs = tf.nn.log_softmax(logits) # shape (batch, vocab_size)
+            lex_log_probs = tf.nn.log_softmax(lex_logits)
+            
+            log_probs = 0.99*log_probs + 0.01*lex_log_probs
             if sum_log_probs == None:
                 sum_log_probs = log_probs
             else:
