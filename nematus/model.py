@@ -276,13 +276,13 @@ class Predictor(object):
             hidden_att_ctx = self.att_ctx_to_hidden.forward(attended_states,input_is_3d=multi_step)
     
         #egarza - add lexical model to logits
-        if lex_model:
-            _c_embed=c_embed
-            _c_embed = lex_model.lexical_model.forward(_c_embed, input_is_3d=multi_step)+_c_embed
+        #if lex_model:
+        _c_embed=c_embed
+        _c_embed = lex_model.lexical_model.forward(_c_embed, input_is_3d=multi_step)+_c_embed
             #if self.config.fixnorm:
             #_c_embed = self.config.fixnorm_r_value * tf.nn.l2_normalize(_c_embed, 0)#-- fixnorm - as per author's code
-            with tf.name_scope("lexical_context_to_logits"):
-                lex_logits = lex_model.lexical_to_logits.forward(_c_embed, input_is_3d=multi_step)
+        with tf.name_scope("lexical_context_to_logits"):
+            lex_logits = lex_model.lexical_to_logits.forward(_c_embed, input_is_3d=multi_step)
                     
         hidden = hidden_emb + hidden_state + hidden_att_ctx
 
