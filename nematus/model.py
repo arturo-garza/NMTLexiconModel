@@ -283,6 +283,7 @@ class Predictor(object):
                 _c_embed = self.config.fixnorm_r_value * tf.nn.l2_normalize(_c_embed, 0)#-- fixnorm - as per author's code
             with tf.name_scope("lexical_context_to_logits"):
                 lex_logits = lex_model.lexical_to_logits.forward(_c_embed, input_is_3d=multi_step)
+                    
         hidden = hidden_emb + hidden_state + hidden_att_ctx
 
         if self.config.output_hidden_activation == 'tanh':
@@ -310,10 +311,10 @@ class Predictor(object):
             #Create fixed weight to validate if less weight in the lex model improves
             #logits = 0.99*logits_step + 0.01*hidden_lex
         #else:
-        if lex_model:
-            return logits, lex_logits
-        else:
-            return logits, None
+        #if lex_model:
+        return lex_logits
+        #else:
+        #    return logits, None
 
 
 class Encoder(object):
@@ -408,7 +409,7 @@ class LexicalModel(object):
                                                       in_size=config.embedding_size,
                                                       out_size=config.target_vocab_size,
                                                       batch_size=batch_size,
-                                                      #non_linearity=lambda y: y,
+                                                      non_linearity=tf.nn.tanh,
                                                       use_layer_norm=config.use_layer_norm,
                                                       #W=self.lex_v,
                                                       dropout_input=dropout_hidden)
@@ -518,24 +519,25 @@ class StandardModel(object):
             #egarza - lexical
             if self.lexical:
                 logging.info('Calling decoder with lexical model...')
-                self.logits, self.lex_logits = self.decoder.score(self.y, self.lexical_model)
+                self.logits = self.decoder.score(self.y, self.lexical_model)
             else:
-                self.logits, _ = self.decoder.score(self.y)
+                self.logits = self.decoder.score(self.y)
 
         with tf.name_scope("loss"):
             self.loss_layer = Masked_cross_entropy_loss(self.y, self.y_mask)
-            self.lex_loss_layer = Masked_cross_entropy_loss(self.y, self.y_mask)
+            #self.lex_loss_layer = Masked_cross_entropy_loss(self.y, self.y_mask)
             
             
             self.loss_per_sentence = self.loss_layer.forward(self.logits)
-            self.lex_loss_per_sentence = self.lex_loss_layer.forward(self.lex_logits)
+            #self.lex_loss_per_sentence = self.lex_loss_layer.forward(self.lex_logits)
             
             self.mean_loss = tf.reduce_mean(self.loss_per_sentence, keep_dims=False)
-            self.lex_mean_loss = tf.reduce_mean(self.lex_loss_per_sentence, keep_dims=False)
+            #self.lex_mean_loss = tf.reduce_mean(self.lex_loss_per_sentence, keep_dims=False)
             #self.mean_loss = tf.reduce_mean(self.loss_per_sentence, keep_dims=False)
             #egarza - RNN and Lexical combined loss
-            self.objective = 0.99*self.mean_loss + 0.01*self.lex_mean_loss
-        
+            #self.objective = 0.99*self.mean_loss + 0.01*self.lex_mean_loss
+            self.objective = self.mean_loss
+            
             self.l2_loss = tf.constant(0.0, dtype=tf.float32)
             if config.decay_c > 0.0:
                 self.l2_loss = tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables()]) * tf.constant(config.decay_c, dtype=tf.float32)
