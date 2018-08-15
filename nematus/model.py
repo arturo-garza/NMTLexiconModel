@@ -10,11 +10,12 @@ import inference
 
 class Decoder(object):
     def __init__(self, config, context, x_mask, dropout_target,
-                 dropout_embedding, dropout_hidden, src_embs):
+                 dropout_embedding, dropout_hidden, src_embs, lexical_model):
         self.src_embs=src_embs
         self.dropout_target = dropout_target
         batch_size = tf.shape(x_mask)[1]
 
+        self.lexical_model=lexical_model
         #egarzaj - define lexical model in Decoder
         if hasattr(config, 'lexical'):
             self.lexical = config.lexical
@@ -133,6 +134,9 @@ class Decoder(object):
                  y_array):
             state1 = self.grustep1.forward(prev_base_state, prev_emb)
             att_ctx, scores = self.attstep.forward(state1, self.src_embs)
+            
+            c_embed = tf.tanh(scores)
+            
             base_state = self.grustep2.forward(state1, att_ctx)
             if self.high_gru_stack == None:
                 output = base_state
@@ -144,8 +148,8 @@ class Decoder(object):
                 else:
                     output, high_states = self.high_gru_stack.forward_single(
                         prev_high_states, base_state, context=att_ctx)
-            rnn_logits, lexical_logits = self.predictor.get_logits(prev_emb, output, att_ctx,
-                                               multi_step=False)
+            logits, lexical_logits = d.predictor.get_logits(prev_embs[j], stack_output, att_ctx, self.lexical_model , c_embed, multi_step=False)
+            
             logits = rnn_logits# lexical_logits
             new_y = tf.multinomial(logits, num_samples=1)
             new_y = tf.cast(new_y, dtype=tf.int32)
@@ -514,7 +518,7 @@ class StandardModel(object):
             self.lexicons = self.lexical_model.calc_lexicons(src_embs, input_is_3d=True)
         with tf.name_scope("decoder"):
             self.decoder = Decoder(config, ctx, self.x_mask, dropout_target,
-                                   dropout_embedding, dropout_hidden, src_embs)
+                                   dropout_embedding, dropout_hidden, src_embs, self.lexical_model)
             #egarza - lexical
             if self.lexical:
                 logging.info('Calling decoder with lexical model...')
@@ -523,18 +527,31 @@ class StandardModel(object):
                 self.logits, _ = self.decoder.score(self.y)
 
         with tf.name_scope("loss"):
-            self.loss_layer = Masked_cross_entropy_loss(self.y, self.y_mask)
-            self.lex_loss_layer = Masked_cross_entropy_loss(self.y, self.y_mask)
+
+            cost_rnn = tf.nn.sparse_softmax_cross_entropy_with_logits(
+                                                      labels=self.y,
+                                                      logits=self.logits)
+            cost_lex = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.y, logits=self.logits)
+            
+            cost = 0.99*cost_rnn + 0.01*cost_lex
+            
+            #cost has shape seqLen x batch
+            cost *= self.y_mask
+            self.loss_per_sentence = tf.reduce_sum(cost, axis=0, keep_dims=False)
             
             
-            self.loss_per_sentence = self.loss_layer.forward(self.logits)
-            self.lex_loss_per_sentence = self.lex_loss_layer.forward(self.lex_logits)
+            #self.loss_layer = Masked_cross_entropy_loss(self.y, self.y_mask)
+            #self.lex_loss_layer = Masked_cross_entropy_loss(self.y, self.y_mask)
+            
+            
+            #self.loss_per_sentence = self.loss_layer.forward(self.logits)
+            #self.lex_loss_per_sentence = self.lex_loss_layer.forward(self.lex_logits)
             
             self.mean_loss = tf.reduce_mean(self.loss_per_sentence, keep_dims=False)
-            self.lex_mean_loss = tf.reduce_mean(self.lex_loss_per_sentence, keep_dims=False)
+            #self.lex_mean_loss = tf.reduce_mean(self.lex_loss_per_sentence, keep_dims=False)
             #self.mean_loss = tf.reduce_mean(self.loss_per_sentence, keep_dims=False)
             #egarza - RNN and Lexical combined loss
-            self.objective = 0.99*self.mean_loss + 0.01*self.lex_mean_loss
+            self.objective = self.mean_loss
         
             self.l2_loss = tf.constant(0.0, dtype=tf.float32)
             if config.decay_c > 0.0:
