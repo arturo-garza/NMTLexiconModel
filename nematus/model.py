@@ -148,10 +148,13 @@ class Decoder(object):
                 else:
                     output, high_states = self.high_gru_stack.forward_single(
                         prev_high_states, base_state, context=att_ctx)
-            logits, lexical_logits = self.predictor.get_logits(prev_emb, output, att_ctx, self.lexical_model , c_embed, multi_step=False)
+            rnn_logits, lexical_logits = self.predictor.get_logits(prev_emb, output, att_ctx, self.lexical_model , c_embed, multi_step=False)
 
-            logits = rnn_logits# lexical_logits
-            new_y = tf.multinomial(logits, num_samples=1)
+            #logits = rnn_logits# lexical_logits
+            rnn_y = tf.multinomial(rnn_logits, num_samples=1)
+            lex_y = tf.multinomial(lexical_logits, num_samples=1)
+            new_y = 0.99*rnn_y + 0.01*lex_y
+            #new_y = tf.multinomial(logits, num_samples=1)
             new_y = tf.cast(new_y, dtype=tf.int32)
             new_y = tf.squeeze(new_y, axis=1)
             new_y = tf.where(tf.equal(prev_y, tf.constant(0, dtype=tf.int32)),
