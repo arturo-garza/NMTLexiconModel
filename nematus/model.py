@@ -10,9 +10,10 @@ import inference
 
 class Decoder(object):
     def __init__(self, config, context, x_mask, dropout_target,
-                 dropout_embedding, dropout_hidden, src_embs):
+                 dropout_embedding, dropout_hidden, src_embs, lexical_model):
         self.src_embs=src_embs
         self.dropout_target = dropout_target
+        self.lexical_model = lexical_model
         batch_size = tf.shape(x_mask)[1]
 
         #egarzaj - define lexical model in Decoder
@@ -133,6 +134,7 @@ class Decoder(object):
                  y_array):
             state1 = self.grustep1.forward(prev_base_state, prev_emb)
             att_ctx, scores = self.attstep.forward(state1, self.src_embs)
+            c_embed = tf.tanh(scores)
             base_state = self.grustep2.forward(state1, att_ctx)
             if self.high_gru_stack == None:
                 output = base_state
@@ -144,8 +146,7 @@ class Decoder(object):
                 else:
                     output, high_states = self.high_gru_stack.forward_single(
                         prev_high_states, base_state, context=att_ctx)
-            logits = self.predictor.get_logits(prev_emb, output, att_ctx,
-                                               multi_step=False)
+            logits = self.predictor.get_logits(prev_emb, output, att_ctx, self.lexical_model, c_embed ,                                              multi_step=False)
             new_y = tf.multinomial(logits, num_samples=1)
             new_y = tf.cast(new_y, dtype=tf.int32)
             new_y = tf.squeeze(new_y, axis=1)
@@ -519,7 +520,7 @@ class StandardModel(object):
             self.lexicons = self.lexical_model.calc_lexicons(src_embs, input_is_3d=True)
         with tf.name_scope("decoder"):
             self.decoder = Decoder(config, ctx, self.x_mask, dropout_target,
-                                   dropout_embedding, dropout_hidden, src_embs)
+                                   dropout_embedding, dropout_hidden, src_embs, self.lexical_model)
             #egarza - lexical
             if self.lexical:
                 logging.info('Calling decoder with lexical model...')
