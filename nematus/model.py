@@ -144,8 +144,10 @@ class Decoder(object):
                 else:
                     output, high_states = self.high_gru_stack.forward_single(
                         prev_high_states, base_state, context=att_ctx)
-            logits = self.predictor.get_logits(prev_emb, output, att_ctx,
-                                               multi_step=False)
+            if self.lexical:
+                logits = self.predictor.get_logits(prev_emb, output, att_ctx, c_embed,self.lexical_model ,multi_step=False)
+            else:
+                logits = self.predictor.get_logits(prev_emb, output, att_ctx, multi_step=False)
             new_y = tf.multinomial(logits, num_samples=1)
             new_y = tf.cast(new_y, dtype=tf.int32)
             new_y = tf.squeeze(new_y, axis=1)
