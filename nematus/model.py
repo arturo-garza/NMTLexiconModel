@@ -305,7 +305,9 @@ class Encoder(object):
                     reverse_alternation=True,
                     residual_connections=True,
                     first_residual_output=1)
-
+    def get_src_embeddings(self):
+        return self.embs
+        
     def get_context(self, x, x_mask):
 
         with tf.name_scope("embedding"):
