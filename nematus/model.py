@@ -541,6 +541,7 @@ class StandardModel(object):
             self.decoder = Decoder(config, ctx, self.x_mask, dropout_target,
                                    dropout_embedding, dropout_hidden)#, src_embs, self.lexical_model)
             self.logits = self.decoder.score(self.y)
+            self.logits = tf.Print(self.logits,[self.logits], "Logits: ")
             #egarza - lexical
             #if self.lexical:
             #    logging.info('Calling decoder with lexical model...')
