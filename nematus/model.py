@@ -205,8 +205,10 @@ class Decoder(object):
             states = self.high_gru_stack.forward(
                 states,
                 context_layer=(attended_states if self.high_gru_stack.context_state_size > 0 else None))
+        
+        
         if self.lexical:
-            logits = self.predictor.get_logits(y_embs, states, attended_states, multi_step=True, c_embed, self.lexical_model)
+            logits = self.predictor.get_logits(y_embs, states, attended_states, c_embed, self.lexical_model, multi_step=True)
         else:
             logits = self.predictor.get_logits(y_embs, states, attended_states, multi_step=True)
         return logits
@@ -253,7 +255,7 @@ class Predictor(object):
                             W=hidden_to_logits_W,
                             dropout_input=dropout_embedding)
 
-    def get_logits(self, y_embs, states, attended_states, multi_step=True, c_embed=None, lexical_model=None):
+    def get_logits(self, y_embs, states, attended_states, c_embed=None, lexical_model=None, multi_step=True):
         with tf.name_scope("prev_emb_to_hidden"):
             hidden_emb = self.prev_emb_to_hidden.forward(y_embs, input_is_3d=multi_step)
 
