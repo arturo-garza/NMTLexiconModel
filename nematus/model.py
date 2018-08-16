@@ -288,6 +288,8 @@ class Predictor(object):
                 _c_embed = self.config.fixnorm_r_value * tf.nn.l2_normalize(_c_embed, 0)#-- fixnorm - as per author's code
             with tf.name_scope("lexical_context_to_logits"):
                 lex_logits = lex_model.lexical_to_logits.forward(_c_embed, input_is_3d=multi_step)
+
+
         hidden = hidden_emb + hidden_state + hidden_att_ctx
 
         if self.config.output_hidden_activation == 'tanh':
@@ -300,21 +302,12 @@ class Predictor(object):
             pass
         else:
             assert(False, 'Unknown output activation function "%s"' % self.config.output_hidden_activation)
-
-        #Apply normalise if fixnorm is enabled
-        if self.config.fixnorm:
-            hidden=self.config.fixnorm_r_value * tf.nn.l2_normalize(hidden,1) #-- fixnorm - as per author's code
-
+        
         #egarza - modified the name to logits step to use it later in conjuction with lex
         with tf.name_scope("hidden_to_logits"):
             logits = self.hidden_to_logits.forward(hidden, input_is_3d=multi_step)
 
         #egarza - lexical
-        #if lex_model:
-            #rnn + lex
-            #Create fixed weight to validate if less weight in the lex model improves
-            #logits = 0.99*logits_step + 0.01*hidden_lex
-        #else:
         if lex_model:
             return logits, lex_logits
         else:
@@ -515,8 +508,11 @@ class StandardModel(object):
         #egarzaj - lexical model
         if config.lexical:
             logging.info('Lexical model enabled...')
-            self.lexical_model = LexicalModel(config, batch_size, dropout_source, dropout_embedding, dropout_hidden, src_embs)
-            self.lexicons = self.lexical_model.calc_lexicons(src_embs, input_is_3d=True)
+            with tf.name_scope("lexical"):
+                self.lexical_model = LexicalModel(config, batch_size, dropout_source, dropout_embedding, dropout_hidden, src_embs)
+                self.lexicons = self.lexical_model.calc_lexicons(src_embs, input_is_3d=True)
+        
+        
         with tf.name_scope("decoder"):
             self.decoder = Decoder(config, ctx, self.x_mask, dropout_target,
                                    dropout_embedding, dropout_hidden, src_embs, self.lexical_model)
