@@ -270,9 +270,9 @@ class Predictor(object):
         #egarza - add lexical model to logits
         if self.config.lexical:
             with tf.name_scope("lexical"):
-                c_embed = lex_model.lexical_model.forward(c_embed, input_is_3d=multi_step)+c_embed
+                c_embed = lexical_model.lexical_model.forward(c_embed, input_is_3d=multi_step)+c_embed
             with tf.name_scope("lexical_context_to_logits"):
-                lex_logits = lex_model.lexical_to_logits.forward(c_embed, input_is_3d=multi_step)
+                lex_logits = lexical_model.lexical_to_logits.forward(c_embed, input_is_3d=multi_step)
         
         
         if self.config.output_hidden_activation == 'tanh':
