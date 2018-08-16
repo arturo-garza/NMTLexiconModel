@@ -86,11 +86,12 @@ def construct_beam_search_functions(models, beam_size):
         for j in range(len(models)):
             d = models[j].decoder
             #egarza - lexmol
-            lex = models[j].lexical_model
+            #lex = models[j].lexical_model
             states1 = d.grustep1.forward(prev_base_states[j], prev_embs[j])
-            att_ctx, scores = d.attstep.forward(states1, d.src_embs)
+            #att_ctx, scores = d.attstep.forward(states1, d.src_embs)
+            att_ctx = d.attstep.forward(states1)
             #egarza - lexmol
-            c_embed = tf.tanh(scores)
+            #c_embed = tf.tanh(scores)
             base_states[j] = d.grustep2.forward(states1, att_ctx)
             if d.high_gru_stack == None:
                 stack_output = base_states[j]
@@ -103,6 +104,8 @@ def construct_beam_search_functions(models, beam_size):
                     stack_output, high_states[j] = d.high_gru_stack.forward_single(
                         prev_high_states[j], base_states[j], context=att_ctx)
             #egarza - lexmol
+#            logits, lex_logits = d.predictor.get_logits(prev_embs[j], stack_output,
+#                                            att_ctx, lex , c_embed, multi_step=False)
             logits, lex_logits = d.predictor.get_logits(prev_embs[j], stack_output,
                                             att_ctx, lex , c_embed, multi_step=False)
             log_probs = tf.nn.log_softmax(logits) # shape (batch, vocab_size)
