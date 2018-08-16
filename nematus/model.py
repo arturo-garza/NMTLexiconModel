@@ -10,10 +10,19 @@ import inference
 
 class Decoder(object):
     def __init__(self, config, context, x_mask, dropout_target,
-                 dropout_embedding, dropout_hidden):
+                 dropout_embedding, dropout_hidden, src_embs = None, lexical_model = None):
 
         self.dropout_target = dropout_target
         batch_size = tf.shape(x_mask)[1]
+        
+        #egarzaj - define lexical model in Decoder
+        if hasattr(config, 'lexical'):
+            self.lexical = config.lexical
+            self.src_embs=src_embs
+            with tf.name_scope("lexical"):
+                self.lexical_model=lexical_model
+        else:
+           self.lexical = None
 
         with tf.name_scope("initial_state_constructor"):
             context_sum = tf.reduce_sum(
@@ -457,11 +466,16 @@ class StandardModel(object):
             with tf.name_scope("lexical"):
                 self.lexical_model = LexicalModel(config, batch_size, dropout_source, dropout_embedding, dropout_hidden, src_embs)
                 #self.lexicons = self.lexical_model.calc_lexicons(src_embs, input_is_3d=True)
-        
-        with tf.name_scope("decoder"):
-            self.decoder = Decoder(config, ctx, self.x_mask, dropout_target,
-                                   dropout_embedding, dropout_hidden)
-            self.logits = self.decoder.score(self.y)
+                
+            with tf.name_scope("decoder"):
+                self.decoder = Decoder(config, ctx, self.x_mask, dropout_target,
+                                       dropout_embedding, dropout_hidden, src_embs, self.lexical_model)
+                self.logits = self.decoder.score(self.y)
+        else:
+            with tf.name_scope("decoder"):
+                self.decoder = Decoder(config, ctx, self.x_mask, dropout_target,
+                                       dropout_embedding, dropout_hidden)
+                self.logits = self.decoder.score(self.y)
         #self.logits = tf.Print(self.logits, [self.logits], "Logits: ")
         with tf.name_scope("loss"):
             self.loss_layer = Masked_cross_entropy_loss(self.y, self.y_mask)
