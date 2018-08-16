@@ -134,9 +134,9 @@ class Decoder(object):
         def body(i, prev_base_state, prev_high_states, prev_y, prev_emb,
                  y_array):
             state1 = self.grustep1.forward(prev_base_state, prev_emb)
-            att_ctx, scores = self.attstep.forward(state1, self.src_embs)
-            
-            c_embed = tf.tanh(scores)
+            #att_ctx, scores = self.attstep.forward(state1, self.src_embs)
+            att_ctx = self.attstep.forward(state1)
+            #c_embed = tf.tanh(scores)
             
             base_state = self.grustep2.forward(state1, att_ctx)
             if self.high_gru_stack == None:
@@ -149,7 +149,8 @@ class Decoder(object):
                 else:
                     output, high_states = self.high_gru_stack.forward_single(
                         prev_high_states, base_state, context=att_ctx)
-            logits, lexical_logits = self.predictor.get_logits(prev_emb, output, att_ctx, self.lexical_model , c_embed, multi_step=False)
+            #logits, lexical_logits = self.predictor.get_logits(prev_emb, output, att_ctx, self.lexical_model , c_embed, multi_step=False)
+            logits = self.predictor.get_logits(prev_emb, output, att_ctx, multi_step=False)
 
             #logits = rnn_logits# lexical_logits
 
@@ -183,9 +184,9 @@ class Decoder(object):
                             paddings=[[1,0],[0,0],[0,0]]) # prepend zeros
         init_attended_context = tf.zeros([tf.shape(self.init_state)[0], self.state_size*2])
         
-        init_state_att_ctx = (self.init_state, init_attended_context, attention_out)
+        #init_state_att_ctx = (self.init_state, init_attended_context, attention_out)
 
-        #init_state_att_ctx = (self.init_state, init_attended_context)
+        init_state_att_ctx = (self.init_state, init_attended_context)
         attention_out = tf.placeholder(dtype=tf.float32, shape = (None, None))#, 1))
         attn_x = tf.placeholder(dtype=tf.float32, shape = (None, None))#, 1))
         
