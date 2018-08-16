@@ -329,6 +329,59 @@ class Encoder(object):
             concat_states = tf.concat([fwd_states, bwd_states], axis=2)
         return concat_states
 
+#egarza - add lexical
+class LexicalModel(object):
+    def __init__(self, config, batch_size, dropout_source, dropout_embedding,
+                 dropout_hidden, src_embs):
+        
+        self.src_embs=src_embs
+        self.config=config
+        self.lex_v = tf.get_variable('lex_v',shape=[config.embedding_size, config.state_size], dtype=tf.float32)
+        
+        self.lex_embedding = config.fixnorm_r_value * tf.nn.l2_normalize(self.lex_v, 0)
+        
+        if config.fixnorm:
+            self.lex_v = config.fixnorm_r_value * tf.nn.l2_normalize(self.lex_v, 0) #-- fixnorm
+        
+        with tf.name_scope("lexical_model"):
+            self.lexical_model =  FeedForwardLayer(in_size=config.embedding_size,
+                                                   out_size=config.state_size,
+                                                   batch_size=batch_size,
+                                                   non_linearity=tf.nn.tanh)
+        
+        with tf.name_scope("lexical_context_to_logits"):
+            self.lexical_to_logits = FeedForwardLayer(
+                                                      in_size=config.embedding_size,
+                                                      out_size=config.target_vocab_size,
+                                                      batch_size=batch_size,
+                                                      #non_linearity=lambda y: y,
+                                                      use_layer_norm=config.use_layer_norm,
+                                                      #W=self.lex_v,
+                                                      dropout_input=dropout_hidden)
+    
+
+    def calc_c_embed(self, attention_mtx):
+        attended = attention_mtx
+        embeds = self.src_embs
+        c_embed = tf.multiply(embeds, attended)
+        c_embed = tf.reduce_sum(c_embed, axis=0, keep_dims=False)
+        #c_embed = tf.reduce_sum(c_embed, 1)
+        c_embed = tf.tanh(c_embed)
+        return c_embed
+
+    def project_embeds(x, axis=1): ##--- fixnorm (might not be necessary) ##
+        embed_norm=self.config.fixnorm_r_value
+        return embed_norm * tf.nn.l2_normalize(x, axis)
+
+    def calc_lexicons(self, x, input_is_3d=False):
+        lex_inputs = tf.tanh(x)
+        lexicons = self.lexical_model.forward(lex_inputs, input_is_3d=True) + lex_inputs
+        #lexicons = project_embeds(lexicons)   --- fixnorm (might not be necessary)
+        #lexicons = tf.matmul(lexicons, self.lex_embedding) + self.lex_bias -- fixnorm
+
+        lexicons=self.lexical_to_logits.forward(lexicons, input_is_3d=True)
+        self.lexicons = tf.nn.softmax(lexicons)
+        return self.lexicons
 
 class StandardModel(object):
     def __init__(self, config):
