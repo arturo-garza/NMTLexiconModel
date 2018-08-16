@@ -88,7 +88,7 @@ def construct_beam_search_functions(models, beam_size):
             #egarza - lexmol
             #lex = models[j].lexical_model
             states1 = d.grustep1.forward(prev_base_states[j], prev_embs[j])
-            if d.config.lexical:
+            if d.lexical:
                 att_ctx, c_embed = d.attstep.forward(states1, d.src_embs)
             else:
                 att_ctx, c_embed = d.attstep.forward(states1)
@@ -104,7 +104,7 @@ def construct_beam_search_functions(models, beam_size):
                     stack_output, high_states[j] = d.high_gru_stack.forward_single(
                         prev_high_states[j], base_states[j], context=att_ctx)
             #egarza - lexmol
-            if d.config.lexical:
+            if d.lexical:
                 logits = d.predictor.get_logits(prev_embs[j], stack_output, att_ctx, c_embed, d.lexical_model, multi_step=False)
             else:
                 logits = d.predictor.get_logits(prev_embs[j], stack_output, att_ctx, multi_step=False)
