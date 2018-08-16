@@ -89,7 +89,7 @@ def construct_beam_search_functions(models, beam_size):
             #lex = models[j].lexical_model
             states1 = d.grustep1.forward(prev_base_states[j], prev_embs[j])
             #att_ctx, scores = d.attstep.forward(states1, d.src_embs)
-            att_ctx = d.attstep.forward(states1)
+            att_ctx, c_embed = d.attstep.forward(states1)
             #egarza - lexmol
             #c_embed = tf.tanh(scores)
             base_states[j] = d.grustep2.forward(states1, att_ctx)

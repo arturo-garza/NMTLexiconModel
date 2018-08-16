@@ -132,7 +132,7 @@ class Decoder(object):
         def body(i, prev_base_state, prev_high_states, prev_y, prev_emb,
                  y_array):
             state1 = self.grustep1.forward(prev_base_state, prev_emb)
-            att_ctx = self.attstep.forward(state1)
+            att_ctx, c_embed = self.attstep.forward(state1)
             base_state = self.grustep2.forward(state1, att_ctx)
             if self.high_gru_stack == None:
                 output = base_state
