@@ -14,8 +14,8 @@ class Decoder(object):
         self.src_embs=src_embs
         self.dropout_target = dropout_target
         batch_size = tf.shape(x_mask)[1]
-
-        self.lexical_model=lexical_model
+        with tf.name_scope("lexical"):
+            self.lexical_model=lexical_model
         #egarzaj - define lexical model in Decoder
         if hasattr(config, 'lexical'):
             self.lexical = config.lexical
@@ -270,7 +270,7 @@ class Predictor(object):
                             W=hidden_to_logits_W,
                             dropout_input=dropout_embedding)
 
-    def get_logits(self, y_embs, states, attended_states, lex_model=None, c_embed=None, multi_step=True):
+    def get_logits(self, y_embs, states, attended_states, lex_model=None, _c_embed=None, multi_step=True):
         with tf.name_scope("prev_emb_to_hidden"):
             hidden_emb = self.prev_emb_to_hidden.forward(y_embs, input_is_3d=multi_step)
 
@@ -282,10 +282,8 @@ class Predictor(object):
     
         #egarza - add lexical model to logits
         if lex_model:
-            _c_embed=c_embed
-            _c_embed = lex_model.lexical_model.forward(_c_embed, input_is_3d=multi_step)+_c_embed
-            if self.config.fixnorm:
-                _c_embed = self.config.fixnorm_r_value * tf.nn.l2_normalize(_c_embed, 0)#-- fixnorm - as per author's code
+            with tf.name_scope("lexical"):
+                _c_embed = lex_model.lexical_model.forward(_c_embed, input_is_3d=multi_step)+_c_embed
             with tf.name_scope("lexical_context_to_logits"):
                 lex_logits = lex_model.lexical_to_logits.forward(_c_embed, input_is_3d=multi_step)
 
