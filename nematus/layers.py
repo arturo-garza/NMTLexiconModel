@@ -532,7 +532,7 @@ class AttentionStep(object):
         attention_context = self.context * tf.expand_dims(scores, axis=2)
         attention_context = tf.reduce_sum(attention_context, axis=0, keep_dims=False)
 
-        #egarza - return attention
+        #egarza - return c_embed
         
         return attention_context, scores_out
 

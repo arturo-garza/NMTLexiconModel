@@ -529,23 +529,21 @@ class StandardModel(object):
 
         with tf.name_scope("loss"):
 
-            cost_rnn = tf.nn.sparse_softmax_cross_entropy_with_logits(
-                                                      labels=self.y,
-                                                      logits=self.logits)
-            cost_lex = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.y, logits=self.logits)
+            #cost_rnn = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.y, logits=self.logits)
+            #cost_lex = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.y, logits=self.logits)
             
-            cost = 0.99*cost_rnn + 0.01*cost_lex
+            #cost = 0.99*cost_rnn + 0.01*cost_lex
             
             #cost has shape seqLen x batch
-            cost *= self.y_mask
-            self.loss_per_sentence = tf.reduce_sum(cost, axis=0, keep_dims=False)
+            #cost *= self.y_mask
+            #self.loss_per_sentence = tf.reduce_sum(cost, axis=0, keep_dims=False)
             
             
-            #self.loss_layer = Masked_cross_entropy_loss(self.y, self.y_mask)
+            self.loss_layer = Masked_cross_entropy_loss(self.y, self.y_mask)
             #self.lex_loss_layer = Masked_cross_entropy_loss(self.y, self.y_mask)
             
             
-            #self.loss_per_sentence = self.loss_layer.forward(self.logits)
+            self.loss_per_sentence = self.loss_layer.forward(self.logits)
             #self.lex_loss_per_sentence = self.lex_loss_layer.forward(self.lex_logits)
             
             self.mean_loss = tf.reduce_mean(self.loss_per_sentence, keep_dims=False)
