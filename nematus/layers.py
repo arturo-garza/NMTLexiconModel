@@ -520,7 +520,7 @@ class AttentionStep(object):
         scores *= self.context_mask
         scores = scores / tf.reduce_sum(scores, axis=0, keep_dims=True)
         
-        tf.Print(scores, [scores], "Scores")
+        scores = tf.Print(scores, [scores], "Scores")
         if src_embs is not None:
             #egarza - calculate c_embeds
             tf.Print(scores, [scores], "Scores")
@@ -532,7 +532,7 @@ class AttentionStep(object):
         else:
             scores_out=scores
         
-        tf.Print(scores, [scores], "Scores 2")
+        scores = tf.Print(scores, [scores], "Scores 2")
 
         attention_context = self.context * tf.expand_dims(scores, axis=2)
         attention_context = tf.reduce_sum(attention_context, axis=0, keep_dims=False)
