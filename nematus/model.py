@@ -173,27 +173,33 @@ class Decoder(object):
             y_embs = tf.pad(y_embs,
                             mode='CONSTANT',
                             paddings=[[1,0],[0,0],[0,0]]) # prepend zeros
-
+        attention_out = tf.placeholder(dtype=tf.float32, shape = (None, None))#, 1))
+        attn_x = tf.placeholder(dtype=tf.float32, shape = (None, None))#, 1))
         init_attended_context = tf.zeros([tf.shape(self.init_state)[0], self.state_size*2])
-        init_state_att_ctx = (self.init_state, init_attended_context)
+        init_state_att_ctx = (self.init_state, init_attended_context, attention_out)
         gates_x, proposal_x = self.grustep1.precompute_from_x(y_embs)
         def step_fn(prev, x):
             prev_state = prev[0]
             prev_att_ctx = prev[1]
+            prev_attention = prev[2]
             gates_x2d = x[0]
             proposal_x2d = x[1]
+            attent = x[2]
             state = self.grustep1.forward(
                         prev_state,
                         gates_x=gates_x2d,
                         proposal_x=proposal_x2d)
-            att_ctx = self.attstep.forward(state)
+            if self.lexical:
+                att_ctx, scores = self.attstep.forward(state, self.src_embs)
+            else:
+                att_ctx, scores = self.attstep.forward(state)
             state = self.grustep2.forward(state, att_ctx)
             #TODO: write att_ctx to tensorArray instead of having it as output of scan?
             return (state, att_ctx)
 
-        states, attended_states = RecurrentLayer(
+        states, attended_states, c_embed = RecurrentLayer(
                                     initial_state=init_state_att_ctx,
-                                    step_fn=step_fn).forward((gates_x, proposal_x))
+                                    step_fn=step_fn).forward((gates_x, proposal_x, attn_x))
 
         if self.high_gru_stack != None:
             states = self.high_gru_stack.forward(
@@ -466,7 +472,7 @@ class StandardModel(object):
             with tf.name_scope("lexical"):
                 self.lexical_model = LexicalModel(config, batch_size, dropout_source, dropout_embedding, dropout_hidden, src_embs)
                 #self.lexicons = self.lexical_model.calc_lexicons(src_embs, input_is_3d=True)
-                
+
             with tf.name_scope("decoder"):
                 self.decoder = Decoder(config, ctx, self.x_mask, dropout_target,
                                        dropout_embedding, dropout_hidden, src_embs, self.lexical_model)
