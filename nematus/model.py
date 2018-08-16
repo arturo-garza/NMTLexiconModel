@@ -195,7 +195,7 @@ class Decoder(object):
                 att_ctx, scores = self.attstep.forward(state)
             state = self.grustep2.forward(state, att_ctx)
             #TODO: write att_ctx to tensorArray instead of having it as output of scan?
-            return (state, att_ctx)
+            return (state, att_ctx, scores)
 
         states, attended_states, c_embed = RecurrentLayer(
                                     initial_state=init_state_att_ctx,
