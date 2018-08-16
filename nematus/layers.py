@@ -522,24 +522,22 @@ class AttentionStep(object):
         
         if src_embs is not None:
             #egarza - calculate c_embeds
-            scores_out = scores
+            #c_embed = scores
             #scores_out = tf.nn.softmax(scores)
-            #scores_out =  tf.multiply(tf.expand_dims(scores, axis=2), src_embs)
-            #scores_out = tf.reduce_sum(scores_out, axis=0, keep_dims=False)
-            #scores_out = tf.nn.softmax(scores_out)
+            c_embed =  tf.multiply(tf.expand_dims(scores, axis=2), src_embs)
+            c_embed = tf.reduce_sum(c_embed, axis=0, keep_dims=False)
+            c_embed = tf.tanh(c_embed)
             #scores_out = tf.nn.softmax(scores_out)
         else:
-            scores_out=scores
+            c_embed = scores
         
 
         attention_context = self.context * tf.expand_dims(scores, axis=2)
         attention_context = tf.reduce_sum(attention_context, axis=0, keep_dims=False)
 
         #egarza - return c_embed
-        if src_embs is not None:
-            return attention_context, scores_out
-        else:
-            return attention_context, None
+        return attention_context, c_embed
+
 
 class Masked_cross_entropy_loss(object):
     def __init__(self,

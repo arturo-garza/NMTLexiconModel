@@ -205,8 +205,10 @@ class Decoder(object):
             states = self.high_gru_stack.forward(
                 states,
                 context_layer=(attended_states if self.high_gru_stack.context_state_size > 0 else None))
-
-        logits = self.predictor.get_logits(y_embs, states, attended_states, multi_step=True)
+        if self.lexical:
+            logits = self.predictor.get_logits(y_embs, states, attended_states, multi_step=True, c_embed, self.lexical_model)
+        else:
+            logits = self.predictor.get_logits(y_embs, states, attended_states, multi_step=True)
         return logits
 
 class Predictor(object):
@@ -251,7 +253,7 @@ class Predictor(object):
                             W=hidden_to_logits_W,
                             dropout_input=dropout_embedding)
 
-    def get_logits(self, y_embs, states, attended_states, multi_step=True):
+    def get_logits(self, y_embs, states, attended_states, multi_step=True, c_embed=None, lexical_model=None):
         with tf.name_scope("prev_emb_to_hidden"):
             hidden_emb = self.prev_emb_to_hidden.forward(y_embs, input_is_3d=multi_step)
 
@@ -262,6 +264,15 @@ class Predictor(object):
             hidden_att_ctx = self.att_ctx_to_hidden.forward(attended_states,input_is_3d=multi_step)
 
         hidden = hidden_emb + hidden_state + hidden_att_ctx
+        
+        #egarza - add lexical model to logits
+        if self.config.lexical:
+             with tf.name_scope("lexical"):
+                c_embed = lex_model.lexical_model.forward(c_embed, input_is_3d=multi_step)+c_embed
+            with tf.name_scope("lexical_context_to_logits"):
+                lex_logits = lex_model.lexical_to_logits.forward(c_embed, input_is_3d=multi_step)
+        
+        
         if self.config.output_hidden_activation == 'tanh':
             hidden = tf.tanh(hidden)
         elif self.config.output_hidden_activation == 'relu':
