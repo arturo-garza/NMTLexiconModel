@@ -446,7 +446,15 @@ class StandardModel(object):
             self.encoder = Encoder(config, batch_size, dropout_source,
                                    dropout_embedding, dropout_hidden)
             ctx = self.encoder.get_context(self.x, self.x_mask)
-
+            src_embs=self.encoder.get_src_embeddings()
+        
+        #egarzaj - lexical model
+        if config.lexical:
+            logging.info('Lexical model enabled...')
+            with tf.name_scope("lexical"):
+                self.lexical_model = LexicalModel(config, batch_size, dropout_source, dropout_embedding, dropout_hidden, src_embs)
+                #self.lexicons = self.lexical_model.calc_lexicons(src_embs, input_is_3d=True)
+        
         with tf.name_scope("decoder"):
             self.decoder = Decoder(config, ctx, self.x_mask, dropout_target,
                                    dropout_embedding, dropout_hidden)
