@@ -149,7 +149,7 @@ class Decoder(object):
                     output, high_states = self.high_gru_stack.forward_single(
                         prev_high_states, base_state, context=att_ctx)
             if self.lexical:
-                logits = self.predictor.get_logits(prev_emb, output, att_ctx, c_embed, self.lexical_model ,multi_step=False)
+                logits, lex_logits = self.predictor.get_logits(prev_emb, output, att_ctx, c_embed, self.lexical_model ,multi_step=False)
             else:
                 logits = self.predictor.get_logits(prev_emb, output, att_ctx, multi_step=False)
             new_y = tf.multinomial(logits, num_samples=1)
@@ -214,10 +214,11 @@ class Decoder(object):
         
         
         if self.lexical:
-            logits = self.predictor.get_logits(y_embs, states, attended_states, c_embed, self.lexical_model, multi_step=True)
+            logits, lex_logits = self.predictor.get_logits(y_embs, states, attended_states, c_embed, self.lexical_model, multi_step=True)
+            return logits, lex_logits
         else:
             logits = self.predictor.get_logits(y_embs, states, attended_states, multi_step=True)
-        return logits
+            return logits
 
 class Predictor(object):
     def __init__(self, config, batch_size, dropout_embedding, dropout_hidden, hidden_to_logits_W=None):
@@ -297,9 +298,10 @@ class Predictor(object):
         
         #egarza - add lexical model to logits
         if self.config.lexical:
-            logits = logits + lex_logits
-        
-        return logits
+            return logits, lex_logits
+            #logits = logits + lex_logits
+        else:
+            return logits
 
 
 class Encoder(object):
@@ -493,7 +495,7 @@ class StandardModel(object):
             with tf.name_scope("decoder"):
                 self.decoder = Decoder(config, ctx, self.x_mask, dropout_target,
                                        dropout_embedding, dropout_hidden, src_embs, self.lexical_model)
-                self.logits = self.decoder.score(self.y)
+                self.logits, self.lex_logits = self.decoder.score(self.y)
         else:
             with tf.name_scope("decoder"):
                 self.decoder = Decoder(config, ctx, self.x_mask, dropout_target,
@@ -501,8 +503,16 @@ class StandardModel(object):
                 self.logits = self.decoder.score(self.y)
         #self.logits = tf.Print(self.logits, [self.logits], "Logits: ")
         with tf.name_scope("loss"):
-            self.loss_layer = Masked_cross_entropy_loss(self.y, self.y_mask)
-            self.loss_per_sentence = self.loss_layer.forward(self.logits)
+            if config.lexical:
+                rnn_cost = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.y, logits=self.logits)
+                lex_cost = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.y, logits=self.lex_logits)
+                cost = 0.9*rnn_cost + 0.1*lex_cost
+                cost *= self.y_mask
+                self.loss_per_sentence = tf.reduce_sum(cost, axis=0, keep_dims=False)
+            else:
+                self.loss_layer = Masked_cross_entropy_loss(self.y, self.y_mask)
+                self.loss_per_sentence = self.loss_layer.forward(self.logits)
+
             self.mean_loss = tf.reduce_mean(self.loss_per_sentence, keep_dims=False)
             self.objective = self.mean_loss
             

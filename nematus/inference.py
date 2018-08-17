@@ -106,16 +106,15 @@ def construct_beam_search_functions(models, beam_size):
                         prev_high_states[j], base_states[j], context=att_ctx)
             #egarza - lexmol
             if d.lexical:
-                logits = d.predictor.get_logits(prev_embs[j], stack_output, att_ctx, c_embed, d.lexical_model, multi_step=False)
+                logits, lex_logits = d.predictor.get_logits(prev_embs[j], stack_output, att_ctx, c_embed, d.lexical_model, multi_step=False)
+                log_probs = tf.nn.log_softmax(logits) # shape (batch, vocab_size)
+                lex_log_probs = tf.nn.log_softmax(lex_logits)
+                log_probs = 0.9*log_probs + 0.1*lex_log_probs
             else:
                 logits = d.predictor.get_logits(prev_embs[j], stack_output, att_ctx, multi_step=False)
-#           logits, lex_logits = d.predictor.get_logits(prev_embs[j], stack_output,
-#                                            att_ctx, lex , c_embed, multi_step=False)
-            #logits = d.predictor.get_logits(prev_embs[j], stack_output,att_ctx, multi_step=False)
-            log_probs = tf.nn.log_softmax(logits) # shape (batch, vocab_size)
-            #lex_log_probs = tf.nn.log_softmax(lex_logits)
+
+                log_probs = tf.nn.log_softmax(logits) # shape (batch, vocab_size)
             
-            #log_probs = 0.99*log_probs + 0.01*lex_log_probs
             if sum_log_probs == None:
                 sum_log_probs = log_probs
             else:
