@@ -291,6 +291,10 @@ class Predictor(object):
         with tf.name_scope("hidden_to_logits"):
             logits = self.hidden_to_logits.forward(hidden, input_is_3d=multi_step)
         
+        #egarza - add lexical model to logits
+        if self.config.lexical:
+            logits = logits + lex_logits
+        
         return logits
 
 
@@ -402,16 +406,10 @@ class LexicalModel(object):
         c_embed = tf.tanh(c_embed)
         return c_embed
 
-    def project_embeds(x, axis=1): ##--- fixnorm (might not be necessary) ##
-        embed_norm=self.config.fixnorm_r_value
-        return embed_norm * tf.nn.l2_normalize(x, axis)
 
     def calc_lexicons(self, x, input_is_3d=False):
         lex_inputs = tf.tanh(x)
         lexicons = self.lexical_model.forward(lex_inputs, input_is_3d=True) + lex_inputs
-        #lexicons = project_embeds(lexicons)   --- fixnorm (might not be necessary)
-        #lexicons = tf.matmul(lexicons, self.lex_embedding) + self.lex_bias -- fixnorm
-
         lexicons=self.lexical_to_logits.forward(lexicons, input_is_3d=True)
         self.lexicons = tf.nn.softmax(lexicons)
         return self.lexicons

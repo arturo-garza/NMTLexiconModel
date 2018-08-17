@@ -90,6 +90,7 @@ def construct_beam_search_functions(models, beam_size):
             states1 = d.grustep1.forward(prev_base_states[j], prev_embs[j])
             if d.lexical:
                 att_ctx, c_embed = d.attstep.forward(states1, d.src_embs)
+                #c_embed = tf.Print(c_embed,[c_embed],"C_embed inference:")
             else:
                 att_ctx, c_embed = d.attstep.forward(states1)
             base_states[j] = d.grustep2.forward(states1, att_ctx)
