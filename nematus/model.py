@@ -132,7 +132,11 @@ class Decoder(object):
         def body(i, prev_base_state, prev_high_states, prev_y, prev_emb,
                  y_array):
             state1 = self.grustep1.forward(prev_base_state, prev_emb)
-            att_ctx, c_embed = self.attstep.forward(state1)
+            #egarza - lexical
+            if self.lexical:
+                att_ctx, c_embed = self.attstep.forward(state1, self.src_embs)
+            else:
+                att_ctx, c_embed = self.attstep.forward(state1)
             base_state = self.grustep2.forward(state1, att_ctx)
             if self.high_gru_stack == None:
                 output = base_state
@@ -145,7 +149,7 @@ class Decoder(object):
                     output, high_states = self.high_gru_stack.forward_single(
                         prev_high_states, base_state, context=att_ctx)
             if self.lexical:
-                logits = self.predictor.get_logits(prev_emb, output, att_ctx, c_embed,self.lexical_model ,multi_step=False)
+                logits = self.predictor.get_logits(prev_emb, output, att_ctx, c_embed, self.lexical_model ,multi_step=False)
             else:
                 logits = self.predictor.get_logits(prev_emb, output, att_ctx, multi_step=False)
             new_y = tf.multinomial(logits, num_samples=1)
@@ -272,7 +276,7 @@ class Predictor(object):
         #egarza - add lexical model to logits
         if self.config.lexical:
             with tf.name_scope("lexical"):
-                c_embed = lexical_model.lexical_model.forward(c_embed, input_is_3d=multi_step)+c_embed
+                c_embed = lexical_model.lexical_model.forward(c_embed, input_is_3d=multi_step) + c_embed
             with tf.name_scope("lexical_context_to_logits"):
                 lex_logits = lexical_model.lexical_to_logits.forward(c_embed, input_is_3d=multi_step)
         
