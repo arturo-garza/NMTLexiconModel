@@ -4,17 +4,16 @@ Modified version of the Nematus framework (https://github.com/EdinburghNLP/nemat
 
  ## nematus_lexical 
  Contains the nematus code with the changes to run the framework with the lexical model
-    - 
-    Changes:
-            model.py 
-                - Added lexical model
-                - Decoder
-                    Modified the decoder initialiser to receive the lexical model in its input.
-                    Modified score funciton to retrieve from the RecursiveLayer the c_embed
-                    Modified the sample function to calculate the logits with the lexical model when the --lexical option is enabled.
-                - Predictor 
-                    Modified the get_logits funtion to 
-              layers.py 
+    Changes: <br />
+            model.py  <br />
+                - Added lexical model <br />
+                - Decoder <br />
+                    Modified the decoder initialiser to receive the lexical model in its input. <br />
+                    Modified score funciton to retrieve from the RecursiveLayer the c_embed <br />
+                    Modified the sample function to calculate the logits with the lexical model when the --lexical option is enabled. <br />
+                - Predictor  <br />
+                    Modified the get_logits funtion to  <br />
+              layers.py <br />
                 -Modified AttentionStep class' forward function to return the c_embed if the source embeddings are given in the input.
               nmt.py 
                 - Added the following options
