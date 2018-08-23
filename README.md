@@ -35,11 +35,19 @@ inference.py
  Contains the nematus code with the additional changes required to run a fixed weight version of the lexical model.
  Changes:
  
+ model.py
+ 
     - Decoder
-      Modified score function
+      Modified score function to return both of the logits that the get_logits funtion in the Predictor would return.
     - Predictor
-    
+      Modified the get_logits funtion to return two logit values, NMT and lexical.
+    - StandarModel
+      Received both of the logits and added the after applying the Softmax function.
 
+inference.py
+
+    - Modified the construct_beam_search_functions to to calculate the logits with the lexical model when the --lexical option is enabled and received both of the logits and added the after applying the Softmax function.
+    
  ## scripts
  Contains auxiliary code we used to run our experiments
  
@@ -62,7 +70,7 @@ This folder contains the scripts we used to get translations from our models. As
     - validate_europarl_shallow_lexical_progress_newstest2014 - is a shell script that iterates over all the saved models. It creates a translation file and their BLEU score for each of them. 
 
  ## vars 
-Specifies all the directories we used in the Valhalla cluster at the University of Edinburgh.
+Specifies all the directories we used in the Valhalla cluster at the University of Edinburgh. All the directories listed in the home directory are symlinked to /fs/meili0/egarza/
 
 
 To run this version of the Nematus framework with the lexical model the following options are available:
@@ -72,7 +80,6 @@ To run this version of the Nematus framework with the lexical model the followin
     --pretrain_dictionary_src If  --bilingual_pretrain is enable this option is required to specify the source file of the parallel dictionationary
     --pretrain_dictionary_trg  If  --bilingual_pretrain is enable this option is required to specify the target file of the parallel dictionationary
     --pretrain_vocabs Option to provide the vocabularies required by the TextIterator class in Nematus
-
 ## Options
 
  --lexical  :  To add train using the Lexical model <br />
