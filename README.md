@@ -8,8 +8,7 @@ This folder contains the code we used to run our experiments.
 
 Modified version of the Nematus framework (https://github.com/EdinburghNLP/nematus/) to implement a lexicon model as proposed in https://arxiv.org/abs/1710.01329.
 
-This folder contains the code we used to run our experiments.
-This folder contains the code we used to run our experiments.
+This folder contains the code we used to run our experiments. :beginner:
 
   ## nematus_lexical 
  Contains the nematus code with the changes to run the framework with the lexical model
@@ -77,7 +76,7 @@ This folder contains the scripts we used to get translations from our models. As
     - validate_europarl_shallow_lexical_progress_newstest2014 - is a shell script that iterates over all the saved models. It creates a translation file and their BLEU score for each of them. 
 
 ## vars 
-Specifies all the directories we used in the Valhalla cluster at the University of Edinburgh. All the directories listed in the home directory are symlinked to /fs/meili0/egarza/
+Specifies all the directories we used in the Valhalla cluster at the University of Edinburgh.
 
 
 ## Options
