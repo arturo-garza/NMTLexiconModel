@@ -2,12 +2,6 @@
 
 Modified version of the Nematus framework (https://github.com/EdinburghNLP/nematus/) to implement a lexicon model as proposed in https://arxiv.org/abs/1710.01329.
 
-This folder contains the code we used to run our experiments.
-
-# Project Code
-
-Modified version of the Nematus framework (https://github.com/EdinburghNLP/nematus/) to implement a lexicon model as proposed in https://arxiv.org/abs/1710.01329.
-
 This folder contains the code we used to run our experiments. :beginner:
 
   ## nematus_lexical 
