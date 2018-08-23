@@ -61,6 +61,9 @@ inference.py
         - top_eng_words.txt: File containing the 3000 most comon english words used to obtain the 400 entries we used for the word task translation.
     - Download and preprocess data
         Sample of the files used to download the datasets to the valhalla cluster and perform preprocess on them. This scripts were waken from the University of Edinburgh's submission to WMT17 http://data.statmt.org/wmt17_systems/training/scripts/.
+    - f1_vocab_chart.py: Script provided by my supervisor to obtain the F1 measure, Precision and Recall
+    - f1_for_vocab_chart.py: Modified version of the script provided by my supervisor to obtain the F1 measure, Precision and Recall
+    - f1_for_30_vocab_chart.py: Modified version of the script provided by my supervisor to obtain the F1 measure, Precision and Recall. Changed the amount of words in the vocabulary.
  
  
 ## run_scripts 
