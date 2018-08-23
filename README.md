@@ -37,7 +37,8 @@ This folder contains the code we used to run our experiments.
         - Predictor
     
 
- ## scripts - Contains auxiliary code we used to run our experiments
+ ## scripts
+ Contains auxiliary code we used to run our experiments
  
     - Create Bilingual dictionaries - folder that contains the sripts we built to create the bilingual dictionary and then the second script used to extract the 400 entries we used to transalate.
         - process_dict.sh: File to run in order to obtain the parallel dictionary from the phrase table in the Valhalla cluster.  This file calls the rest of the files in the directory.
