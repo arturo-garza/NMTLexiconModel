@@ -22,22 +22,22 @@ layers.py
     - Modified AttentionStep class' forward function to return the c_embed if the source embeddings are given in the input.
 nmt.py 
             
-            - Added the following options
-                - --lexical Boolean option to train the architecture with the lexical model
-                - --bilingual_pretrain Boolean option to specify that we want to perform pretrain on a bilingual dictionary
-                - --pretrain_dictionary_src If  --bilingual_pretrain is enable this option is required to specify the source file of the parallel dictionationary
-                - --pretrain_dictionary_trg  If  --bilingual_pretrain is enable this option is required to specify the target file of the parallel dictionationary
-                - --pretrain_vocabs Option to provide the vocabularies required by the TextIterator class in Nematus
+    - Added the following options
+      --lexical Boolean option to train the architecture with the lexical model
+      --bilingual_pretrain Boolean option to specify that we want to perform pretrain on a bilingual dictionary
+      --pretrain_dictionary_src If  --bilingual_pretrain is enable this option is required to specify the source file of the parallel dictionationary
+       --pretrain_dictionary_trg  If  --bilingual_pretrain is enable this option is required to specify the target file of the parallel dictionationary
+       --pretrain_vocabs Option to provide the vocabularies required by the TextIterator class in Nematus
 inference.py
 
-            - Modified the construct_beam_search_functions to to calculate the logits with the lexical model when the --lexical option is enabled.
+    - Modified the construct_beam_search_functions to to calculate the logits with the lexical model when the --lexical option is enabled.
  ## nematus_weighted
  Contains the nematus code with the additional changes required to run a fixed weight version of the lexical model.
+ Changes:
  
-    Changes:
-        - Decoder
-            Modified score function
-        - Predictor
+    - Decoder
+      Modified score function
+    - Predictor
     
 
  ## scripts
