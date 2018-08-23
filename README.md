@@ -53,9 +53,15 @@ inference.py
  
     - Create Bilingual dictionaries - folder that contains the sripts we built to create the bilingual dictionary and then the second script used to extract the 400 entries we used to transalate.
         - process_dict.sh: File to run in order to obtain the parallel dictionary from the phrase table in the Valhalla cluster.  This file calls the rest of the files in the directory.
-        - process_dictionary.py: Reads the phrase base table and retrieves the entries that are above the probability specified.
-        - split_two2.pl:  Perl script to split into two the dictionary obtained by process_dictionary.py. This scripts needs to be provided with <dictionary with two columns src-trg> <source_file location and name> <target_file location and name>
+        - process_dictionary.py: Reads the phrase base table and retrieves the one word entries that are above the probability specified.
+        - process_dictionary2.py: Reads the dictionary extracted with rocess_dictionary.py and retrieves the entries that are in the top_eng_words.txt to which it can find a translation.
+        - split_two.pl: Perl script to split into two the dictionary obtained by process_dictionary.py. This scripts needs to be provided with <dictionary with two columns src-trg> <source_file location and name> <target_file location and name>
+        - split_two2.pl:  Perl script to split into two the dictionary obtained by process_dictionary2.py. This script is used to obtain the subset of translations.
+        - maxsizedict.py: File used to filter out a maximum amount of entries in the dictionary. The entries to keep are selected at random in a reservoir sampling way.
         - top_eng_words.txt: File containing the 3000 most comon english words used to obtain the 400 entries we used for the word task translation.
+    - Download and preprocess data
+        Sample of the files used to download the datasets to the valhalla cluster and perform preprocess on them. This scripts were waken from the University of Edinburgh's submission to WMT17 http://data.statmt.org/wmt17_systems/training/scripts/.
+ 
  
 ## run_scripts 
 Example of the script we used to train the architecture with the lexical model. As examples provided are:
