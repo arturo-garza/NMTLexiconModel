@@ -62,7 +62,7 @@ This folder contains the scripts we used to get translations from our models. As
     - validate_europarl_shallow_lexical_progress_newstest2014 - is a shell script that iterates over all the saved models. It creates a translation file and their BLEU score for each of them. 
 
  ## vars 
-Specifies all the directories we used in the Valhalla cluster at the University of Edinburgh. All the directories listed in the home directory are symlinked to /fs/meili0/egarza/
+Specifies all the directories we used in the Valhalla cluster at the University of Edinburgh.
 
 
 To run this version of the Nematus framework with the lexical model the following options are available:
