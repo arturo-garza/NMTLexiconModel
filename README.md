@@ -52,14 +52,14 @@ inference.py
 ## run_scripts 
 Example of the script we used to train the architecture with the lexical model. As examples provided are:
 
-       - wmt14_shallow_lexical -  Script to run the model with the lexical model by only using the new --lexical option
-        - europarl_lexical_pretrain - Script to run the model with the lexical model and the pretrain using the pre-train options
+    - wmt14_shallow_lexical -  Script to run the model with the lexical model by only using the new --lexical option
+    - europarl_lexical_pretrain - Script to run the model with the lexical model and the pretrain using the pre-train options
 
 ## validate_scripts
 This folder contains the scripts we used to get translations from our models. As example we proveide the following:
 
-        - preprocess_validate_europarl_lexical_v2_progress - is a shell script that creates multiple copies of the model's json. This is done to be able to iterate through all of the intermediate models.
-        - validate_europarl_shallow_lexical_progress_newstest2014 - is a shell script that iterates over all the saved models. It creates a translation file and their BLEU score for each of them. 
+    - preprocess_validate_europarl_lexical_v2_progress - is a shell script that creates multiple copies of the model's json. This is done to be able to iterate through all of the intermediate models.
+    - validate_europarl_shallow_lexical_progress_newstest2014 - is a shell script that iterates over all the saved models. It creates a translation file and their BLEU score for each of them. 
 
  ## vars 
 Specifies all the directories we used in the Valhalla cluster at the University of Edinburgh. All the directories listed in the home directory are symlinked to /fs/meili0/egarza/
@@ -67,11 +67,11 @@ Specifies all the directories we used in the Valhalla cluster at the University 
 
 To run this version of the Nematus framework with the lexical model the following options are available:
 
-    - --lexical - Boolean flag that specifies that the framework should be trained with the lexical model
-    - --bilingual_pretrain Boolean option to specify that we want to perform pretrain on a bilingual dictionary
-    - --pretrain_dictionary_src If  --bilingual_pretrain is enable this option is required to specify the source file of the parallel dictionationary
-    - --pretrain_dictionary_trg  If  --bilingual_pretrain is enable this option is required to specify the target file of the parallel dictionationary
-    - --pretrain_vocabs Option to provide the vocabularies required by the TextIterator class in Nematus
+    --lexical - Boolean flag that specifies that the framework should be trained with the lexical model
+    --bilingual_pretrain Boolean option to specify that we want to perform pretrain on a bilingual dictionary
+    --pretrain_dictionary_src If  --bilingual_pretrain is enable this option is required to specify the source file of the parallel dictionationary
+    --pretrain_dictionary_trg  If  --bilingual_pretrain is enable this option is required to specify the target file of the parallel dictionationary
+    --pretrain_vocabs Option to provide the vocabularies required by the TextIterator class in Nematus
 
 ## Options
 
