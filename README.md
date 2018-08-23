@@ -9,17 +9,17 @@ This folder contains the code we used to run our experiments.
 Changes:
 
 model.py 
-
-            - Added lexical model
-            - Decoder
-                Modified the decoder initialiser to receive the lexical model in its input.
-                Modified score funciton to retrieve from the RecursiveLayer the c_embed
-                Modified the sample function to calculate the logits with the lexical model when the --lexical option is enabled.
-            - Predictor 
-                Modified the get_logits funtion to 
+  
+    - Added lexical model
+    - Decoder
+        Modified the decoder initialiser to receive the lexical model in its input.
+        Modified score funciton to retrieve from the RecursiveLayer the c_embed
+        Modified the sample function to calculate the logits with the lexical model when the --lexical option is enabled.
+    - Predictor 
+        Modified the get_logits funtion to 
 layers.py 
-            
-            - Modified AttentionStep class' forward function to return the c_embed if the source embeddings are given in the input.
+
+    - Modified AttentionStep class' forward function to return the c_embed if the source embeddings are given in the input.
 nmt.py 
             
             - Added the following options
