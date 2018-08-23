@@ -4,11 +4,12 @@ Modified version of the Nematus framework (https://github.com/EdinburghNLP/nemat
 
 This folder contains the code we used to run our experiments.
 
- ## nematus_lexical 
+  ## nematus_lexical 
  Contains the nematus code with the changes to run the framework with the lexical model
-      
-    -  Changes:
-        - model.py 
+Changes:
+
+model.py 
+
             - Added lexical model
             - Decoder
                 Modified the decoder initialiser to receive the lexical model in its input.
@@ -16,18 +17,20 @@ This folder contains the code we used to run our experiments.
                 Modified the sample function to calculate the logits with the lexical model when the --lexical option is enabled.
             - Predictor 
                 Modified the get_logits funtion to 
-          - layers.py 
+layers.py 
+            
             - Modified AttentionStep class' forward function to return the c_embed if the source embeddings are given in the input.
-          - nmt.py 
+nmt.py 
+            
             - Added the following options
                 - --lexical Boolean option to train the architecture with the lexical model
                 - --bilingual_pretrain Boolean option to specify that we want to perform pretrain on a bilingual dictionary
                 - --pretrain_dictionary_src If  --bilingual_pretrain is enable this option is required to specify the source file of the parallel dictionationary
                 - --pretrain_dictionary_trg  If  --bilingual_pretrain is enable this option is required to specify the target file of the parallel dictionationary
                 - --pretrain_vocabs Option to provide the vocabularies required by the TextIterator class in Nematus
-          - inference.py
-            - Modified the construct_beam_search_functions to to calculate the logits with the lexical model when the --lexical option is enabled.
+inference.py
 
+            - Modified the construct_beam_search_functions to to calculate the logits with the lexical model when the --lexical option is enabled.
  ## nematus_weighted
  Contains the nematus code with the additional changes required to run a fixed weight version of the lexical model.
  
