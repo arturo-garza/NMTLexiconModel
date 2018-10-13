@@ -396,13 +396,15 @@ class Encoder(object):
                     residual_connections=True,
                     first_residual_output=1)
 
+    def get_src_embeddings(self):
+        return self.embs
     def get_context(self, x, x_mask):
 
         with tf.variable_scope("embedding"):
             embs = self.emb_layer.forward(x)
             if self.dropout_source != None:
                 embs = self.dropout_source(embs)
-
+            self.embs = embs
         with tf.variable_scope("forward-stack"):
             fwd_states = self.forward_encoder.forward(embs, x_mask)
 
