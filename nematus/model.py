@@ -457,12 +457,12 @@ class LexicalModel(object):
                  dropout_hidden):
         self.config=config
         with tf.name_scope("lexical_model"):
-            self.lexical_model =  FeedForwardLayer(in_size=config.embedding_size,
+            self.lexical_model =  layers.FeedForwardLayer(in_size=config.embedding_size,
                                                    out_size=config.state_size,
                                                    batch_size=batch_size,
                                                    non_linearity=tf.nn.tanh)
         with tf.name_scope("lexical_context_to_logits"):
-            self.lexical_to_logits = FeedForwardLayer(
+            self.lexical_to_logits = layers.FeedForwardLayer(
                                                       in_size=config.embedding_size,
                                                       out_size=config.target_vocab_size,
                                                       batch_size=batch_size,
