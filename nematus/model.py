@@ -520,7 +520,7 @@ class StandardModel(object):
             
         if config.lexical:
             logging.info('Lexical model enabled...')
-            with tf.name_scope("lexical"):
+            with tf.variable_scope("lexical"):
                 self.lexical_model = LexicalModel(config, batch_size, dropout_source, dropout_embedding, dropout_hidden)
             with tf.variable_scope("decoder"):
                 if config.tie_encoder_decoder_embeddings:
