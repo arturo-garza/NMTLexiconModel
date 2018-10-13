@@ -225,7 +225,7 @@ class Decoder(object):
                 context_layer=(attended_states if self.high_gru_stack.context_state_size > 0 else None))
 
         if self.lexical:
-            c_embed = self.lexical_model.calc_c_embeds(self.src_embs, scores)
+            c_embed = self.lexical_model.calc_c_embed(self.src_embs, scores)
             logits, lex_logits = self.predictor.get_logits(y_embs, states, attended_states, c_embed, self.lexical_model, multi_step=True)
             return logits, lex_logits
         else:
