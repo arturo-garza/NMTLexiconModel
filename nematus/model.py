@@ -208,10 +208,7 @@ class Decoder(object):
                         prev_state,
                         gates_x=gates_x2d,
                         proposal_x=proposal_x2d)
-            if self.lexical:
-                att_ctx, scores = self.attstep.forward(state, self.src_embs)
-            else:
-                att_ctx, scores = self.attstep.forward(state)
+            att_ctx, scores = self.attstep.forward(state)
             state = self.grustep2.forward(state, att_ctx)
             #TODO: write att_ctx to tensorArray instead of having it as output of scan?
             return (state, att_ctx, scores)
