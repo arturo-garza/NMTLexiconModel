@@ -7,8 +7,19 @@ import json
 import cPickle as pkl
 import numpy
 
+# Source:
+# https://stackoverflow.com/questions/38559755/how-to-get-current-available-gpus-in-tensorflow
+def get_available_gpus():
+    """
+        Returns a list of the identifiers of all visible GPUs.
+    """
+    from tensorflow.python.client import device_lib
+    local_device_protos = device_lib.list_local_devices()
+    return [x.name for x in local_device_protos if x.device_type == 'GPU']
+
+
 # batch preparation
-def prepare_data(seqs_x, seqs_y, maxlen=None):
+def prepare_data(seqs_x, seqs_y, n_factors, maxlen=None):
     # x: a list of sentences
     lengths_x = [len(s) for s in seqs_x]
     lengths_y = [len(s) for s in seqs_y]
@@ -33,7 +44,6 @@ def prepare_data(seqs_x, seqs_y, maxlen=None):
             return None, None, None, None
 
     n_samples = len(seqs_x)
-    n_factors = len(seqs_x[0][0])
     maxlen_x = numpy.max(lengths_x) + 1
     maxlen_y = numpy.max(lengths_y) + 1
 

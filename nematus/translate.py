@@ -15,12 +15,13 @@ from multiprocessing import Process, Queue
 from collections import defaultdict
 from Queue import Empty
 
+from model import StandardModel
 from util import load_dict, load_config, seq2words, prepare_data
 from compat import fill_options
 from hypgraph import HypGraphRenderer
 from settings import TranslationSettings
 
-from nmt import create_model, load_dictionaries, read_all_lines
+from nmt import init_or_restore_variables, load_dictionaries, read_all_lines
 
 import inference
 import exception
@@ -54,6 +55,7 @@ class Translator(object):
         self._num_processes = settings.num_processes
         self._verbose = settings.verbose
         self._retrieved_translations = defaultdict(dict)
+        self._batch_size = settings.b
 
         # load model options
         self._load_model_options()
@@ -120,8 +122,10 @@ class Translator(object):
         import tensorflow as tf
         models = []
         for i, options in enumerate(self._options):
-            with tf.name_scope("model%d" % i) as scope:
-                model, saver = create_model(options, sess, ensemble_scope=scope)
+            with tf.variable_scope("model%d" % i) as scope:
+                model = StandardModel(options)
+                saver = init_or_restore_variables(options, sess,
+                                                  ensemble_scope=scope)
                 models.append(model)
 
         logging.info("NOTE: Length of translations is capped to {}".format(self._options[0].translation_maxlen))
@@ -135,7 +139,9 @@ class Translator(object):
 
         # load TF functionality
         import tensorflow as tf
-        sess = tf.Session()
+        tf_config = tf.ConfigProto()
+        tf_config.allow_soft_placement = True
+        sess = tf.Session(config=tf_config)
         models = self._load_models(process_id, sess)
 
         # listen to queue in while loop, translate items
@@ -149,8 +155,7 @@ class Translator(object):
 
             output_item = self._translate(process_id, input_item, models, sess)
             self._output_queue.put((request_id, idx, output_item))
-        
-        sess.close()
+
         return
 
     def _translate(self, process_id, input_item, models, sess):
@@ -164,7 +169,7 @@ class Translator(object):
         #max_ratio = input_item.max_ratio
 
         y_dummy = numpy.zeros(shape=(len(x),1))
-        x, x_mask, _, _ = prepare_data(x, y_dummy, maxlen=None)
+        x, x_mask, _, _ = prepare_data(x, y_dummy, self._options[0].factors, maxlen=None)
 
         sample = inference.beam_search(models, sess, x, x_mask, k)
 
@@ -179,7 +184,8 @@ class Translator(object):
         source_batches = []
 
         try:
-            batches, idxs = read_all_lines(self._options[0], input_)
+            batches, idxs = read_all_lines(self._options[0], input_,
+                                           self._batch_size)
         except exception.Error as x:
             logging.error(x.msg)
             for process in self._processes:
@@ -359,6 +365,6 @@ if __name__ == "__main__":
     input_file = translation_settings.input
     output_file = translation_settings.output
     # start logging
-    level = logging.DEBUG if translation_settings.verbose else logging.WARNING
+    level = logging.DEBUG if translation_settings.verbose else logging.INFO
     logging.basicConfig(level=level, format='%(levelname)s: %(message)s')
     main(input_file, output_file, translation_settings)

@@ -2,9 +2,14 @@
 Layer definitions
 """
 
-from initializers import ortho_weight, norm_weight
 import tensorflow as tf
-import numpy
+
+import initializers
+
+class LegacyBiasType:
+    THEANO = 1
+    NEMATUS_COMPAT_TRUE = 2
+    NEMATUS_COMPAT_FALSE = 3
 
 def matmul3d(x3d, matrix):
     shape = tf.shape(x3d)
@@ -34,9 +39,11 @@ class FeedForwardLayer(object):
                  use_layer_norm=False,
                  dropout_input=None):
         if W is None:
-            W = tf.Variable(norm_weight(in_size, out_size), name='W')
+            init = initializers.norm_weight(in_size, out_size)
+            W = tf.get_variable('W', initializer=init)
         self.W = W
-        self.b = tf.Variable(numpy.zeros((out_size,)).astype('float32'), name='b')
+        self.b = tf.get_variable('b', [out_size],
+                                 initializer=tf.zeros_initializer)
         self.non_linearity = non_linearity
         self.use_layer_norm = use_layer_norm
         if use_layer_norm:
@@ -56,38 +63,38 @@ class FeedForwardLayer(object):
         else:
             y = tf.matmul(x, self.W) + self.b
         if self.use_layer_norm:
-            y = self.layer_norm.forward(y, input_is_3d=input_is_3d)
+            y = self.layer_norm.forward(y)
         y = self.non_linearity(y)
         return y
 
+
 class EmbeddingLayer(object):
-    def __init__(self,
-                 vocabulary_size,
-                 embedding_size):
-        self.embeddings = tf.Variable(norm_weight(vocabulary_size, embedding_size),
-                                      name='embeddings')
-
-    def forward(self, x):
-        embs = tf.nn.embedding_lookup(self.embeddings, x)
-        return embs
-
-    def get_embeddings(self):
-        return self.embeddings
-
-class EmbeddingLayerWithFactors(object):
-    def __init__(self,
-                 vocabulary_sizes,
-                 dim_per_factor):
+    def __init__(self, vocabulary_sizes, dim_per_factor):
         assert len(vocabulary_sizes) == len(dim_per_factor)
-        self.embedding_matrices = [
-            tf.Variable(norm_weight(vocab_size, dim), name='embeddings')
-                for vocab_size, dim in zip(vocabulary_sizes, dim_per_factor)]
+        self.embedding_matrices = []
+        for i in range(len(vocabulary_sizes)):
+            vocab_size, dim = vocabulary_sizes[i], dim_per_factor[i]
+            var_name = 'embeddings' if i == 0 else 'embeddings_' + str(i)
+            init = initializers.norm_weight(vocab_size, dim)
+            matrix = tf.get_variable(var_name, initializer=init)
+            self.embedding_matrices.append(matrix)
 
-    def forward(self, x):
-        # Assumes that x has shape: factors, ...
-        embs = [tf.nn.embedding_lookup(matrix, x[i])
-                for i, matrix in enumerate(self.embedding_matrices)]
-        return tf.concat(embs, axis=-1)
+    def forward(self, x, factor=None):
+        if factor == None:
+            # Assumes that x has shape: factors, ...
+            embs = [tf.nn.embedding_lookup(matrix, x[i])
+                    for i, matrix in enumerate(self.embedding_matrices)]
+            return tf.concat(embs, axis=-1)
+        else:
+            matrix = self.embedding_matrices[factor]
+            return tf.nn.embedding_lookup(matrix, x)
+
+    def get_embeddings(self, factor=None):
+        if factor == None:
+            return self.embedding_matrices
+        else:
+            return self.embedding_matrices[factor]
+
 
 class RecurrentLayer(object):
     def __init__(self,
@@ -108,74 +115,67 @@ class LayerNormLayer(object):
                  layer_size,
                  eps=1e-5):
         #TODO: If nematus_compat is true, then eps must be 1e-5!
-        new_mean = numpy.zeros(shape=[layer_size], dtype=numpy.float32)
-        self.new_mean = tf.Variable(new_mean,
-                                    dtype=tf.float32,
-                                    name='new_mean')
-        new_std = numpy.ones(shape=[layer_size], dtype=numpy.float32)
-        self.new_std = tf.Variable(new_std,
-                                   dtype=tf.float32,
-                                   name='new_std')
+        self.new_mean = tf.get_variable('new_mean', [layer_size],
+                                        initializer=tf.zeros_initializer)
+        self.new_std = tf.get_variable('new_std', [layer_size],
+                                       initializer=tf.constant_initializer(1))
         self.eps = eps
-    def forward(self, x, input_is_3d=False):
-        # NOTE: tf.nn.moments does not support axes=[-1] or axes=[tf.rank(x)-1] :-(
-        # TODO: Actually, this is probably fixed now and should be tested with latest
-        # TF version. See: https://github.com/tensorflow/tensorflow/issues/8101
-        axis = 2 if input_is_3d else 1
-        m, v = tf.nn.moments(x, axes=[axis], keep_dims=True)
+
+    def forward(self, x):
+        m, v = tf.nn.moments(x, axes=[-1], keep_dims=True)
         std = tf.sqrt(v + self.eps)
         norm_x = (x-m)/std
         new_x = norm_x*self.new_std + self.new_mean
         return new_x
-    
+
 class GRUStep(object):
     def __init__(self, 
                  input_size, 
                  state_size,
                  batch_size,
                  use_layer_norm=False,
-                 nematus_compat=False,
+                 legacy_bias_type=LegacyBiasType.NEMATUS_COMPAT_FALSE,
                  dropout_input=None,
                  dropout_state=None):
-        self.state_to_gates = tf.Variable(
-                                numpy.concatenate(
-                                    [ortho_weight(state_size),
-                                     ortho_weight(state_size)],
-                                    axis=1), 
-                                name='state_to_gates')
+        init = tf.concat([initializers.ortho_weight(state_size),
+                          initializers.ortho_weight(state_size)],
+                         axis=1)
+        self.state_to_gates = tf.get_variable('state_to_gates',
+                                              initializer=init)
         if input_size > 0:
-            self.input_to_gates = tf.Variable(
-                                    numpy.concatenate(
-                                        [norm_weight(input_size, state_size),
-                                         norm_weight(input_size, state_size)],
-                                        axis=1),
-                                    name='input_to_gates')
-        self.gates_bias = tf.Variable(
-                            numpy.zeros((2*state_size,)).astype('float32'),
-                            name='gates_bias')
+            init = tf.concat([initializers.norm_weight(input_size, state_size),
+                              initializers.norm_weight(input_size, state_size)],
+                             axis=1)
+            self.input_to_gates = tf.get_variable('input_to_gates',
+                                                  initializer=init)
+        self.gates_bias = tf.get_variable('gates_bias', [2*state_size],
+                                          initializer=tf.zeros_initializer)
 
-        self.state_to_proposal = tf.Variable(
-                                    ortho_weight(state_size),
-                                    name = 'state_to_proposal')
+        init = initializers.ortho_weight(state_size)
+        self.state_to_proposal = tf.get_variable('state_to_proposal',
+                                                 initializer=init)
         if input_size > 0:
-            self.input_to_proposal = tf.Variable(
-                                        norm_weight(input_size, state_size),
-                                        name = 'input_to_proposal')
-        self.proposal_bias = tf.Variable(
-                                    numpy.zeros((state_size,)).astype('float32'),
-                                    name='proposal_bias')
-        self.nematus_compat = nematus_compat
+            init = initializers.norm_weight(input_size, state_size)
+            self.input_to_proposal = tf.get_variable('input_to_proposal',
+                                                     initializer=init)
+        self.proposal_bias = tf.get_variable('proposal_bias', [state_size],
+                                             initializer=tf.zeros_initializer)
+        self.legacy_bias_type = legacy_bias_type
         self.use_layer_norm = use_layer_norm
 
+        self.gates_state_norm = None
+        self.proposal_state_norm = None
+        self.gates_x_norm = None
+        self.proposal_x_norm = None
         if self.use_layer_norm:
-            with tf.name_scope('gates_state_norm'):
+            with tf.variable_scope('gates_state_norm'):
                 self.gates_state_norm = LayerNormLayer(2*state_size)
-            with tf.name_scope('proposal_state_norm'):
+            with tf.variable_scope('proposal_state_norm'):
                 self.proposal_state_norm = LayerNormLayer(state_size)
             if input_size > 0:
-                with tf.name_scope('gates_x_norm'):
+                with tf.variable_scope('gates_x_norm'):
                     self.gates_x_norm = LayerNormLayer(2*state_size)
-                with tf.name_scope('proposal_x_norm'):
+                with tf.variable_scope('proposal_x_norm'):
                     self.proposal_x_norm = LayerNormLayer(state_size)
 
         # Create dropout masks for input values (reused at every timestep).
@@ -202,21 +202,19 @@ class GRUStep(object):
             gates_x = matmul3d(x, self.input_to_gates)
         else:
             gates_x = tf.matmul(x, self.input_to_gates)
-        if not self.nematus_compat:
-            gates_x += self.gates_bias
-        if self.use_layer_norm:
-            gates_x = self.gates_x_norm.forward(gates_x, input_is_3d=input_is_3d)
-        return gates_x
+        return self._layer_norm_and_bias(x=gates_x,
+                                         b=self.gates_bias,
+                                         layer_norm=self.gates_x_norm,
+                                         x_is_input=True)
 
     def _get_gates_state(self, prev_state):
         prev_state = apply_dropout_mask(prev_state,
                                         self.dropout_mask_state_to_gates)
         gates_state = tf.matmul(prev_state, self.state_to_gates)
-        if self.nematus_compat:
-            gates_state += self.gates_bias
-        if self.use_layer_norm:
-            gates_state = self.gates_state_norm.forward(gates_state)
-        return gates_state
+        return self._layer_norm_and_bias(x=gates_state,
+                                         b=self.gates_bias,
+                                         layer_norm=self.gates_state_norm,
+                                         x_is_input=False)
 
     def _get_proposal_x(self,x, input_is_3d=False):
         x = apply_dropout_mask(x, self.dropout_mask_input_to_proposal,
@@ -225,22 +223,42 @@ class GRUStep(object):
             proposal_x = matmul3d(x, self.input_to_proposal)
         else:
             proposal_x = tf.matmul(x, self.input_to_proposal)
-        if not self.nematus_compat:
-            proposal_x += self.proposal_bias
-        if self.use_layer_norm:
-            proposal_x = self.proposal_x_norm.forward(proposal_x, input_is_3d=input_is_3d)
-        return proposal_x
+        return self._layer_norm_and_bias(x=proposal_x,
+                                         b=self.proposal_bias,
+                                         layer_norm=self.proposal_x_norm,
+                                         x_is_input=True)
 
     def _get_proposal_state(self, prev_state):
         prev_state = apply_dropout_mask(prev_state,
                                         self.dropout_mask_state_to_proposal)
         proposal_state = tf.matmul(prev_state, self.state_to_proposal)
-        # placing the bias here is unorthodox, but we're keeping this behavior for compatibility with dl4mt-tutorial
-        if self.nematus_compat:
-            proposal_state += self.proposal_bias
-        if self.use_layer_norm:
-            proposal_state = self.proposal_state_norm.forward(proposal_state)
-        return proposal_state
+        return self._layer_norm_and_bias(x=proposal_state,
+                                         b=self.proposal_bias,
+                                         layer_norm=self.proposal_state_norm,
+                                         x_is_input=False)
+
+    def _layer_norm_and_bias(self, x, b, layer_norm, x_is_input):
+        assert self.use_layer_norm == (layer_norm is not None)
+        if self.legacy_bias_type == LegacyBiasType.THEANO:
+            # This emulates the Theano version of Nematus.
+            if not self.use_layer_norm:
+                return x + b
+            if x_is_input:
+                return layer_norm.forward(x+b)
+            else:
+                return layer_norm.forward(x) + b
+        if self.legacy_bias_type == LegacyBiasType.NEMATUS_COMPAT_TRUE:
+            if x_is_input:
+                return layer_norm.forward(x) if self.use_layer_norm else x
+            else:
+                return layer_norm.forward(x+b) if self.use_layer_norm else x+b
+        elif self.legacy_bias_type == LegacyBiasType.NEMATUS_COMPAT_FALSE:
+            if x_is_input:
+                return layer_norm.forward(x+b) if self.use_layer_norm else x+b
+            else:
+                return layer_norm.forward(x) if self.use_layer_norm else x
+        else:
+            assert False
 
     def precompute_from_x(self, x):
         # compute gates_x and proposal_x in one big matrix multiply
@@ -290,19 +308,19 @@ class DeepTransitionGRUStep(object):
                  state_size,
                  batch_size,
                  use_layer_norm=False,
-                 nematus_compat=False,
+                 legacy_bias_type=LegacyBiasType.NEMATUS_COMPAT_FALSE,
                  dropout_input=None,
                  dropout_state=None,
                  transition_depth=1,
-                 name_scope_fn=lambda i: "gru{0}".format(i)):
+                 var_scope_fn=lambda i: "gru{0}".format(i)):
         self.gru_steps = []
         for i in range(transition_depth):
-            with tf.name_scope(name_scope_fn(i)):
+            with tf.variable_scope(var_scope_fn(i)):
                 gru = GRUStep(input_size=(input_size if i == 0 else 0),
                               state_size=state_size,
                               batch_size=batch_size,
                               use_layer_norm=use_layer_norm,
-                              nematus_compat=nematus_compat,
+                              legacy_bias_type=legacy_bias_type,
                               dropout_input=(dropout_input if i == 0 else None),
                               dropout_state=dropout_state)
             self.gru_steps.append(gru)
@@ -334,7 +352,7 @@ class GRUStack(object):
                  state_size,
                  batch_size,
                  use_layer_norm=False,
-                 nematus_compat=False,
+                 legacy_bias_type=LegacyBiasType.NEMATUS_COMPAT_FALSE,
                  dropout_input=None,
                  dropout_state=None,
                  stack_depth=1,
@@ -354,13 +372,13 @@ class GRUStack(object):
         self.grus = []
         for i in range(stack_depth):
             in_size = (input_size if i == 0 else state_size) + context_state_size
-            with tf.name_scope("level{0}".format(i)):
+            with tf.variable_scope("level{0}".format(i)):
                 self.grus.append(DeepTransitionGRUStep(
                     input_size=in_size,
                     state_size=state_size,
                     batch_size=batch_size,
                     use_layer_norm=use_layer_norm,
-                    nematus_compat=nematus_compat,
+                    legacy_bias_type=legacy_bias_type,
                     dropout_input=(dropout_input if i == 0 else dropout_state),
                     dropout_state=dropout_state,
                     transition_depth=transition_depth))
@@ -454,23 +472,23 @@ class AttentionStep(object):
                  use_layer_norm=False,
                  dropout_context=None,
                  dropout_state=None):
-        self.state_to_hidden = tf.Variable(
-                                norm_weight(state_size, hidden_size),
-                                name='state_to_hidden')
-        self.context_to_hidden = tf.Variable( #TODO: Nematus uses ortho_weight here - important?
-                                    norm_weight(context_state_size, hidden_size), 
-                                    name='context_to_hidden')
-        self.hidden_bias = tf.Variable(
-                            numpy.zeros((hidden_size,)).astype('float32'),
-                            name='hidden_bias')
-        self.hidden_to_score = tf.Variable(
-                                norm_weight(hidden_size, 1),
-                                name='hidden_to_score')
+        init = initializers.norm_weight(state_size, hidden_size)
+        self.state_to_hidden = tf.get_variable('state_to_hidden',
+                                               initializer=init)
+        #TODO: Nematus uses ortho_weight here - important?
+        init = initializers.norm_weight(context_state_size, hidden_size)
+        self.context_to_hidden = tf.get_variable('context_to_hidden',
+                                                 initializer=init)
+        self.hidden_bias = tf.get_variable('hidden_bias', [hidden_size],
+                                           initializer=tf.zeros_initializer)
+        init = initializers.norm_weight(hidden_size, 1)
+        self.hidden_to_score = tf.get_variable('hidden_to_score',
+                                               initializer=init)
         self.use_layer_norm = use_layer_norm
         if self.use_layer_norm:
-            with tf.name_scope('hidden_context_norm'):
+            with tf.variable_scope('hidden_context_norm'):
                 self.hidden_context_norm = LayerNormLayer(layer_size=hidden_size)
-            with tf.name_scope('hidden_state_norm'):
+            with tf.variable_scope('hidden_state_norm'):
                 self.hidden_state_norm = LayerNormLayer(layer_size=hidden_size)
         self.context = context
         self.context_mask = context_mask
@@ -499,15 +517,15 @@ class AttentionStep(object):
         self.hidden_from_context += self.hidden_bias
         if self.use_layer_norm:
             self.hidden_from_context = \
-                self.hidden_context_norm.forward(self.hidden_from_context, input_is_3d=True)
+                self.hidden_context_norm.forward(self.hidden_from_context)
 
-    def forward(self, prev_state, src_embs=None):
+    def forward(self, prev_state):
         prev_state = apply_dropout_mask(prev_state,
                                         self.dropout_mask_state_to_hidden)
         hidden_from_state = tf.matmul(prev_state, self.state_to_hidden)
         if self.use_layer_norm:
             hidden_from_state = \
-                self.hidden_state_norm.forward(hidden_from_state, input_is_3d=False)
+                self.hidden_state_norm.forward(hidden_from_state)
         hidden = self.hidden_from_context + hidden_from_state
         hidden = tf.nn.tanh(hidden)
         # context has shape seqLen x batch x context_state_size
@@ -515,50 +533,58 @@ class AttentionStep(object):
 
         scores = matmul3d(hidden, self.hidden_to_score) # seqLen x batch x 1
         scores = tf.squeeze(scores, axis=2)
-        scores = scores - tf.reduce_max(scores, axis=0, keep_dims=True)
+        scores = scores - tf.reduce_max(scores, axis=0, keepdims=True)
         scores = tf.exp(scores)
         scores *= self.context_mask
-        scores = scores / tf.reduce_sum(scores, axis=0, keep_dims=True)
-        
-        if src_embs is not None:
-            #egarza - calculate c_embeds
-            c_embed =  tf.multiply(tf.expand_dims(scores, axis=2), src_embs)
-            c_embed = tf.reduce_sum(c_embed, axis=0, keep_dims=False)
-            c_embed = tf.tanh(c_embed)
-        else:
-            c_embed = scores
-        
-
+        scores = scores / tf.reduce_sum(scores, axis=0, keepdims=True)
+        attention_mtx = tf.expand_dims(scores, axis=2)
         attention_context = self.context * tf.expand_dims(scores, axis=2)
-        attention_context = tf.reduce_sum(attention_context, axis=0, keep_dims=False)
+        attention_context = tf.reduce_sum(attention_context, axis=0, keepdims=False)
 
-        #egarza - return c_embed
-        return attention_context, c_embed
-
+        return attention_context, attention_mtx
 
 class Masked_cross_entropy_loss(object):
     def __init__(self,
                  y_true,
-                 y_mask):
+                 y_mask,
+                 label_smoothing=0.1,
+                 training=False):
         self.y_true = y_true
         self.y_mask = y_mask
 
+        if label_smoothing:
+           self.label_smoothing = True
+           self.smoothing_factor = label_smoothing
+        else:
+           self.label_smoothing = False
+
 
     def forward(self, logits):
-        cost = tf.nn.sparse_softmax_cross_entropy_with_logits(
+        if self.label_smoothing:
+            uniform_prob = self.smoothing_factor / tf.cast(tf.shape(logits)[-1], tf.float32)
+            smoothed_prob = 1.0-self.smoothing_factor + uniform_prob
+            onehot_labels = tf.one_hot(self.y_true, tf.shape(logits)[-1], on_value = smoothed_prob, off_value = uniform_prob, dtype = tf.float32)
+            cost = tf.losses.softmax_cross_entropy(
+                onehot_labels=onehot_labels,
+                logits=logits,
+                weights=self.y_mask,
+                reduction=tf.losses.Reduction.NONE)
+        else:
+            cost = tf.losses.sparse_softmax_cross_entropy(
                 labels=self.y_true,
-                logits=logits)
-        #cost has shape seqLen x batch
-        cost *= self.y_mask
-        cost = tf.reduce_sum(cost, axis=0, keep_dims=False)
+                logits=logits,
+                weights=self.y_mask,
+                reduction=tf.losses.Reduction.NONE)
+
+        cost = tf.reduce_sum(cost, axis=0, keepdims=False)
         return cost
 
 class PReLU(object):
     def __init__(self,
                  in_size,
                  initial_slope = 1.0):
-
-        self.slope = tf.Variable(initial_slope * numpy.ones((in_size,)).astype('float32'), name='slope')
+        init = initial_slope * tf.ones([in_size])
+        self.slope = tf.get_variable('slope', initializer=init)
 
     def forward(self, x):
         pos = tf.nn.relu(x)

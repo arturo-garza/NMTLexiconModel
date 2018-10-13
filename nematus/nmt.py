@@ -7,28 +7,31 @@ import os
 import logging
 import time
 import argparse
+import subprocess
+import tempfile
+import json
+import sys
 
+import numpy
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
+#import tensorflow.contrib.framework as slim ???
 
 from threading import Thread
 from Queue import Queue
 from datetime import datetime
 from collections import OrderedDict
 
-from layers import *
 from data_iterator import TextIterator
 
-from model import *
-from util import *
+from model import StandardModel
+from model_updater import ModelUpdater
+import util
 import training_progress
 import exception
 import compat
 
-def create_model(config, sess, ensemble_scope=None, train=False):
-    logging.info('Building model...')
-    model = StandardModel(config)
-
+def init_or_restore_variables(config, sess, ensemble_scope=None, train=False):
     # Construct a mapping between saved variable names and names in the current
     # scope. There are two reasons why names might be different:
     #
@@ -44,8 +47,12 @@ def create_model(config, sess, ensemble_scope=None, train=False):
         name = v.name.split(':')[0]
         if ensemble_scope == None:
             saved_name = name
-        elif v.name.startswith(ensemble_scope):
-            saved_name = name[len(ensemble_scope):]
+        elif v.name.startswith(ensemble_scope.name + "/"):
+            saved_name = name[len(ensemble_scope.name)+1:]
+            # The ensemble scope is repeated for Adam variables. See
+            # https://github.com/tensorflow/tensorflow/issues/8120
+            if saved_name.startswith(ensemble_scope.name + "/"):
+                saved_name = saved_name[len(ensemble_scope.name)+1:]
         else: # v belongs to a different model in the ensemble.
             continue
         if config.model_version == 0.1:
@@ -79,6 +86,7 @@ def create_model(config, sess, ensemble_scope=None, train=False):
         progress.eidx = 0
         progress.estop = False
         progress.history_errs = []
+        progress.valid_script_scores = []
         if reload_filename and config.reload_training_progress:
             path = reload_filename + '.progress.json'
             if os.path.exists(path):
@@ -102,22 +110,14 @@ def create_model(config, sess, ensemble_scope=None, train=False):
     else:
         logging.info('Loading model parameters from file ' + os.path.abspath(reload_filename))
         saver.restore(sess, os.path.abspath(reload_filename))
-        if train:
-            # The global step is currently recorded in two places:
-            #   1. model.t, a tf.Variable read and updated by the optimizer
-            #   2. progress.uidx, a Python integer updated by train()
-            # We reset model.t to the value recorded in progress to allow the
-            # value to be controlled by the user (either explicitly by
-            # configuring the value in the progress file or implicitly by using
-            # --no_reload_training_progress).
-            model.reset_global_step(progress.uidx, sess)
 
     logging.info('Done')
 
     if train:
-        return model, saver, progress
+        return saver, progress
     else:
-        return model, saver
+        return saver
+
 
 def load_prior(config, sess, saver):
      logging.info('Loading prior model parameters from file ' + os.path.abspath(config.prior_model))
@@ -127,7 +127,7 @@ def load_prior(config, sess, saver):
      prior_variables = tf.get_collection_ref('prior_variables')
      prior_variables_dict = dict([(v.name, v) for v in prior_variables])
      assign_tensors = []
-     with tf.name_scope('prior'):
+     with tf.variable_scope('prior'):
          for v in tf.trainable_variables():
              prior_name = 'loss/prior/'+v.name
              prior_variable = prior_variables_dict[prior_name]
@@ -153,8 +153,7 @@ def load_data(config):
                         maxibatch_size=config.maxibatch_size,
                         token_batch_size=config.token_batch_size,
                         keep_data_in_memory=config.keep_train_set_in_memory)
-        
-        
+
     if config.validFreq and config.valid_source_dataset and config.valid_target_dataset:
         valid_text_iterator = TextIterator(
                             source=config.valid_source_dataset,
@@ -173,41 +172,27 @@ def load_data(config):
     else:
         logging.info('no validation set loaded')
         valid_text_iterator = None
-
-    #egarzaj - pretrain data
-    if config.bilingual_pretrain and config.pretrain_vocabs:
-        logging.info('Reading pretrain data...')
-        pretrain_text_iterator = TextIterator(
-            source=config.pretrain_dictionary_src,
-            target=config.pretrain_dictionary_trg,
-            #source_dicts=config.source_dicts,
-            #target_dict=config.target_dict,
-            source_dicts=config.pre_source_dicts,
-            target_dict=config.pre_target_dict,
-            batch_size=config.batch_size,
-            maxlen=config.maxlen,
-            #source_vocab_sizes=config.source_vocab_sizes,
-            #target_vocab_size=config.target_vocab_size,
-            shuffle_each_epoch=False,
-            sort_by_length=True,
-            use_factor=(config.factors > 1),
-            maxibatch_size=config.maxibatch_size,
-            token_batch_size=config.valid_token_batch_size)
-    else:
-        logging.info('no pretrainning loaded')
-        pretrain_text_iterator = None
     logging.info('Done')
-    return text_iterator, valid_text_iterator , pretrain_text_iterator
+    return text_iterator, valid_text_iterator
 
 def load_dictionaries(config):
-    source_to_num = [load_dict(d) for d in config.source_dicts]
-    target_to_num = load_dict(config.target_dict)
-    num_to_source = [reverse_dict(d) for d in source_to_num]
-    num_to_target = reverse_dict(target_to_num)
+    source_to_num = [util.load_dict(d) for d in config.source_dicts]
+    target_to_num = util.load_dict(config.target_dict)
+    num_to_source = [util.reverse_dict(d) for d in source_to_num]
+    num_to_target = util.reverse_dict(target_to_num)
     return source_to_num, target_to_num, num_to_source, num_to_target
 
-def read_all_lines(config, sentences):
+def read_all_lines(config, sentences, batch_size):
     source_to_num, _, _, _ = load_dictionaries(config)
+
+    if config.source_vocab_sizes != None:
+        assert len(config.source_vocab_sizes) == len(source_to_num)
+        for d, vocab_size in zip(source_to_num, config.source_vocab_sizes):
+            if vocab_size != None and vocab_size > 0:
+                for key, idx in d.items():
+                    if idx >= vocab_size:
+                        del d[key]
+
     lines = []
     for sent in sentences:
         line = []
@@ -231,132 +216,80 @@ def read_all_lines(config, sentences):
 
     #merge into batches
     batches = []
-    for i in range(0, len(lines), config.valid_batch_size):
-        batch = lines[i:i+config.valid_batch_size]
+    for i in range(0, len(lines), batch_size):
+        batch = lines[i:i+batch_size]
         batches.append(batch)
 
     return batches, idxs
+
 
 def train(config, sess):
     assert (config.prior_model != None and (tf.train.checkpoint_exists(os.path.abspath(config.prior_model))) or (config.map_decay_c==0.0)), \
     "MAP training requires a prior model file: Use command-line option --prior_model"
 
-    model, saver, progress = create_model(config, sess, train=True)
-    
-    x,x_mask,y,y_mask,training = model.get_score_inputs()
-    apply_grads = model.get_apply_grads()
-    t = model.get_global_step()
-    loss_per_sentence = model.get_loss()
-    objective = model.get_objective()
+    # Construct the graph, with one model replica per GPU
+
+    num_replicas = len(util.get_available_gpus())
+
+    logging.info('Building model...')
+    replicas = []
+    for i in range(num_replicas):
+        with tf.device(tf.DeviceSpec(device_type="GPU", device_index=i)):
+            with tf.variable_scope(tf.get_variable_scope(), reuse=(i>0)):
+                replicas.append(StandardModel(config))
+
+    if config.optimizer == 'adam':
+        optimizer = tf.train.AdamOptimizer(learning_rate=config.learning_rate)
+    else:
+        logging.error('No valid optimizer defined: {}'.format(config.optimizer))
+        sys.exit(1)
+
+    init = tf.zeros_initializer(dtype=tf.int32)
+    global_step = tf.get_variable('time', [], initializer=init, trainable=False)
 
     if config.summaryFreq:
-        summary_dir = config.summary_dir if (config.summary_dir != None) else (os.path.abspath(os.path.dirname(config.saveto)))
+        summary_dir = (config.summary_dir if config.summary_dir is not None
+                       else os.path.abspath(os.path.dirname(config.saveto)))
         writer = tf.summary.FileWriter(summary_dir, sess.graph)
-    tf.summary.scalar(name='mean_cost', tensor=objective)
-    tf.summary.scalar(name='t', tensor=t)
-    merged = tf.summary.merge_all()
+    else:
+        writer = None
+
+    updater = ModelUpdater(config, replicas, optimizer, global_step, writer)
+
+    saver, progress = init_or_restore_variables(config, sess, train=True)
+
+    global_step.load(progress.uidx, sess)
 
     #save model options
     config_as_dict = OrderedDict(sorted(vars(config).items()))
     json.dump(config_as_dict, open('%s.json' % config.saveto, 'wb'), indent=2)
 
-    text_iterator, valid_text_iterator, pretrain_text_iterator = load_data(config)
+    text_iterator, valid_text_iterator = load_data(config)
     _, _, num_to_source, num_to_target = load_dictionaries(config)
     total_loss = 0.
     n_sents, n_words = 0, 0
     last_time = time.time()
     logging.info("Initial uidx={}".format(progress.uidx))
-
-    #egarzaj - pretrain on all the bilingial dictionary
-    if config.bilingual_pretrain and config.pretrain_dictionary_src and config.pretrain_dictionary_trg:
-        logging.info('Starting training on pretrain data...')
-        logging.info('config prevalid freq '+`config.prevalidFreq`)
-        for progress.eidx in xrange(progress.eidx, config.max_epochs):
-            #logging.info('Starting epoch {0}'.format(progress.eidx))
-            for source_sents, target_sents in pretrain_text_iterator:
-                #logging.info(target_sents)
-                if len(source_sents[0][0]) != config.factors:
-                    logging.error('Mismatch between number of factors in settings ({0}), and number in training corpus ({1})\n'.format(config.factors, len(source_sents[0][0])))
-                    sys.exit(1)
-                    x_in, x_mask_in, y_in, y_mask_in = prepare_data(source_sents, target_sents, maxlen=None)
-                    if x_in is None:
-                        logging.info('Minibatch with zero sample under length {0}'.format(config.maxlen))
-                        continue
-                    write_summary_for_this_batch = config.summaryFreq and ((progress.uidx % config.summaryFreq == 0) or (config.finish_after and progress.uidx % config.finish_after == 0))
-                    (factors, seqLen, batch_size) = x_in.shape
-                    inn = {x:x_in, y:y_in, x_mask:x_mask_in, y_mask:y_mask_in, training:True}
-                    out = [t, apply_grads, objective]
-                    if write_summary_for_this_batch:
-                        out += [merged]
-                    out_values = sess.run(out, feed_dict=inn)
-                    objective_value = out_values[2]
-                    total_loss += objective_value*batch_size
-                    n_sents += batch_size
-                    n_words += int(numpy.sum(y_mask_in))
-                    logging.info('progress.uidx '+`progress.uidx`)
-                    progress.uidx += 1
-                    
-                    if write_summary_for_this_batch:
-                        writer.add_summary(out_values[3], out_values[0])
-
-                    if config.prevalidFreq and progress.uidx % config.prevalidFreq == 0:
-                        duration = time.time() - last_time
-                        disp_time = datetime.now().strftime('[%Y-%m-%d %H:%M:%S]')
-                        logging.info('{0} Epoch: {1} Update: {2}'.format(disp_time, progress.eidx, progress.uidx))
-                        last_time = time.time()
-
-                    #Validate
-                    if config.prevalidFreq and progress.uidx % config.prevalidFreq == 0:
-                        #print(config.prevalidFreq)
-                        costs = validate(config, sess, valid_text_iterator, model)
-                        # validation loss is mean of normalized sentence log probs
-                        valid_loss = sum(costs) / len(costs)
-                        if (len(progress.history_errs) == 0 or
-                            valid_loss < min(progress.history_errs)):
-                            progress.bad_counter = 0
-                            saver.save(sess, save_path=config.saveto)
-                            progress_path = '{0}.progress.json'.format(config.saveto)
-                            progress.save_to_json(progress_path)
-                        else:
-                            progress.bad_counter += 1
-                            if progress.bad_counter > config.patience:
-                                logging.info('Early Stop!')
-                                progress.estop = True
-                                break
-                        progress.history_errs.append(valid_loss)
-                
-        logging.info('Pretrain complete...')
-        logging.info('Saving...')
-        saver.save(sess, save_path=config.saveto, global_step=progress.uidx)
-        progress_path = '{0}-{1}.progress.json'.format(config.saveto, progress.uidx)
-        progress.save_to_json(progress_path)
-        logging.info('Done.')
-
-    for progress.eidx in xrange(0, config.max_epochs):
+    for progress.eidx in xrange(progress.eidx, config.max_epochs):
         logging.info('Starting epoch {0}'.format(progress.eidx))
         for source_sents, target_sents in text_iterator:
             if len(source_sents[0][0]) != config.factors:
                 logging.error('Mismatch between number of factors in settings ({0}), and number in training corpus ({1})\n'.format(config.factors, len(source_sents[0][0])))
                 sys.exit(1)
-            x_in, x_mask_in, y_in, y_mask_in = prepare_data(source_sents, target_sents, maxlen=None)
+            x_in, x_mask_in, y_in, y_mask_in = util.prepare_data(
+                source_sents, target_sents, config.factors, maxlen=None)
             if x_in is None:
                 logging.info('Minibatch with zero sample under length {0}'.format(config.maxlen))
                 continue
             write_summary_for_this_batch = config.summaryFreq and ((progress.uidx % config.summaryFreq == 0) or (config.finish_after and progress.uidx % config.finish_after == 0))
             (factors, seqLen, batch_size) = x_in.shape
-            inn = {x:x_in, y:y_in, x_mask:x_mask_in, y_mask:y_mask_in, training:True}
-            out = [t, apply_grads, objective]
-            if write_summary_for_this_batch:
-                out += [merged]
-            out_values = sess.run(out, feed_dict=inn)
-            objective_value = out_values[2]
-            total_loss += objective_value*batch_size
+
+            loss = updater.update(sess, x_in, x_mask_in, y_in, y_mask_in,
+                                  write_summary_for_this_batch)
+            total_loss += loss
             n_sents += batch_size
             n_words += int(numpy.sum(y_mask_in))
             progress.uidx += 1
-
-            if write_summary_for_this_batch:
-                writer.add_summary(out_values[3], out_values[0])
 
             if config.dispFreq and progress.uidx % config.dispFreq == 0:
                 duration = time.time() - last_time
@@ -366,49 +299,72 @@ def train(config, sess):
                 total_loss = 0.
                 n_sents = 0
                 n_words = 0
-    
-            if config.saveFreq and progress.uidx % config.saveFreq == 0:
-                saver.save(sess, save_path=config.saveto, global_step=progress.uidx)
-                progress_path = '{0}-{1}.progress.json'.format(config.saveto, progress.uidx)
-                progress.save_to_json(progress_path)
 
             if config.sampleFreq and progress.uidx % config.sampleFreq == 0:
                 x_small, x_mask_small, y_small = x_in[:, :, :10], x_mask_in[:, :10], y_in[:, :10]
-                samples = model.sample(sess, x_small, x_mask_small)
+                samples = replicas[0].sample(sess, x_small, x_mask_small)
                 assert len(samples) == len(x_small.T) == len(y_small.T), (len(samples), x_small.shape, y_small.shape)
                 for xx, yy, ss in zip(x_small.T, y_small.T, samples):
-                    logging.info('SOURCE: {0}'.format(factoredseq2words(xx, num_to_source)))
-                    logging.info('TARGET: {0}'.format(seq2words(yy, num_to_target)))
-                    logging.info('SAMPLE: {0}'.format(seq2words(ss, num_to_target)))
+                    source = util.factoredseq2words(xx, num_to_source)
+                    target = util.seq2words(yy, num_to_target)
+                    sample = util.seq2words(ss, num_to_target)
+                    logging.info('SOURCE: {}'.format(source))
+                    logging.info('TARGET: {}'.format(target))
+                    logging.info('SAMPLE: {}'.format(sample))
 
             if config.beamFreq and progress.uidx % config.beamFreq == 0:
                 x_small, x_mask_small, y_small = x_in[:, :, :10], x_mask_in[:, :10], y_in[:,:10]
-                samples = model.beam_search(sess, x_small, x_mask_small, config.beam_size)
+                samples = replicas[0].beam_search(sess, x_small, x_mask_small, config.beam_size)
                 # samples is a list with shape batch x beam x len
                 assert len(samples) == len(x_small.T) == len(y_small.T), (len(samples), x_small.shape, y_small.shape)
                 for xx, yy, ss in zip(x_small.T, y_small.T, samples):
-                    logging.info('SOURCE: {0}'.format(factoredseq2words(xx, num_to_source)))
-                    logging.info('TARGET: {0}'.format(seq2words(yy, num_to_target)))
-                    for i, (sample, cost) in enumerate(ss):
-                        logging.info('SAMPLE {0}: {1} Cost/Len/Avg {2}/{3}/{4}'.format(i, seq2words(sample, num_to_target), cost, len(sample), cost/len(sample)))
+                    source = util.factoredseq2words(xx, num_to_source)
+                    target = util.seq2words(yy, num_to_target)
+                    logging.info('SOURCE: {}'.format(source))
+                    logging.info('TARGET: {}'.format(target))
+                    for i, (sample_seq, cost) in enumerate(ss):
+                        sample = util.seq2words(sample_seq, num_to_target)
+                        msg = 'SAMPLE {}: {} Cost/Len/Avg {}/{}/{}'.format(
+                            i, sample, cost, len(sample), cost/len(sample))
+                        logging.info(msg)
 
             if config.validFreq and progress.uidx % config.validFreq == 0:
-                costs = validate(config, sess, valid_text_iterator, model)
+                costs = validate(config, sess, valid_text_iterator, replicas[0])
                 # validation loss is mean of normalized sentence log probs
                 valid_loss = sum(costs) / len(costs)
                 if (len(progress.history_errs) == 0 or
                     valid_loss < min(progress.history_errs)):
+                    progress.history_errs.append(valid_loss)
                     progress.bad_counter = 0
                     saver.save(sess, save_path=config.saveto)
                     progress_path = '{0}.progress.json'.format(config.saveto)
                     progress.save_to_json(progress_path)
                 else:
+                    progress.history_errs.append(valid_loss)
                     progress.bad_counter += 1
                     if progress.bad_counter > config.patience:
                         logging.info('Early Stop!')
                         progress.estop = True
                         break
-                progress.history_errs.append(valid_loss)
+                if config.valid_script is not None:
+                    score = validate_with_script(sess, replicas[0], config,
+                                                 valid_text_iterator)
+                    need_to_save = (score is not None and
+                        (len(progress.valid_script_scores) == 0 or
+                         score > max(progress.valid_script_scores)))
+                    if score is None:
+                        score = 0.0  # ensure a valid value is written
+                    progress.valid_script_scores.append(score)
+                    if need_to_save:
+                        save_path = config.saveto + ".best-valid-script"
+                        saver.save(sess, save_path=save_path)
+                        progress_path = '{}.progress.json'.format(save_path)
+                        progress.save_to_json(progress_path)
+
+            if config.saveFreq and progress.uidx % config.saveFreq == 0:
+                saver.save(sess, save_path=config.saveto, global_step=progress.uidx)
+                progress_path = '{0}-{1}.progress.json'.format(config.saveto, progress.uidx)
+                progress.save_to_json(progress_path)
 
             if config.finish_after and progress.uidx % config.finish_after == 0:
                 logging.info("Maximum number of updates reached")
@@ -420,21 +376,25 @@ def train(config, sess):
         if progress.estop:
             break
 
-def translate(config, sess):
-    model, saver = create_model(config, sess)
+
+# TODO This function shares a lot of code with translate.Translator.  Can
+# we use that class instead (without too much painful refactoring)?
+def translate_validation_set(sess, model, config, output_file=sys.stdin):
     start_time = time.time()
     _, _, _, num_to_target = load_dictionaries(config)
     logging.info("NOTE: Length of translations is capped to {}".format(config.translation_maxlen))
 
     n_sent = 0
     try:
-        batches, idxs = read_all_lines(config, open(config.valid_source_dataset, 'r').readlines())
+        sentences = open(config.valid_source_dataset, 'r').readlines()
+        batches, idxs = read_all_lines(config, sentences,
+                                       config.valid_batch_size)
     except exception.Error as x:
         logging.error(x.msg)
         sys.exit(1)
     in_queue, out_queue = Queue(), Queue()
     model._get_beam_search_outputs(config.beam_size)
-    
+
     def translate_worker(in_queue, out_queue, model, sess, config):
         while True:
             job = in_queue.get()
@@ -442,7 +402,8 @@ def translate(config, sess):
                 break
             idx, x = job
             y_dummy = numpy.zeros(shape=(len(x),1))
-            x, x_mask, _, _ = prepare_data(x, y_dummy, maxlen=None)
+            x, x_mask, _, _ = util.prepare_data(x, y_dummy, config.factors,
+                                                maxlen=None)
             try:
                 samples = model.beam_search(sess, x, x_mask, config.beam_size)
                 out_queue.put((idx, samples))
@@ -477,27 +438,61 @@ def translate(config, sess):
         beam = sorted(beam, key=lambda (sent, cost): cost)
         if config.n_best:
             for sent, cost in beam:
-                print seq2words(sent, num_to_target), '[%f]' % cost
+                translation = util.seq2words(sent, num_to_target)
+                line = "{} [{}]\n".format(translation, cost)
+                output_file.write(line)
         else:
             best_hypo, cost = beam[0]
-            print seq2words(best_hypo, num_to_target)
+            line = util.seq2words(best_hypo, num_to_target) + '\n'
+            output_file.write(line)
     duration = time.time() - start_time
     logging.info('Translated {} sents in {} sec. Speed {} sents/sec'.format(n_sent, duration, n_sent/duration))
 
 
-def validate(config, sess, valid_text_iterator, model, normalization_alpha=0):
-    costs = []
-    total_loss = 0.
-    total_seen = 0
-    x,x_mask,y,y_mask,training = model.get_score_inputs()
+def validate_with_script(sess, model, config, valid_text_iterator):
+    if config.valid_script == None:
+        return None
+    logging.info('Starting external validation.')
+    out = tempfile.NamedTemporaryFile()
+    translate_validation_set(sess, model, config, output_file=out)
+    out.flush()
+    args = [config.valid_script, out.name]
+    proc = subprocess.Popen(args, stdin=None, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+    stdout, stderr = proc.communicate()
+    if len(stderr) > 0:
+        logging.info("Validation script wrote the following to standard "
+                     "error:\n" + stderr)
+    if proc.returncode != 0:
+        logging.warning("Validation script failed (returned exit status of "
+                        "{}).".format(proc.returncode))
+        return None
+    try:
+        score = float(stdout.split()[0])
+    except:
+        logging.warning("Validation script output does not look like a score: "
+                        "{}".format(stdout))
+        return None
+    logging.info("Validation script score: {}".format(score))
+    return score
+
+
+# TODO Support for multiple GPUs
+def calc_loss_per_sentence(config, sess, text_iterator, model,
+                           normalization_alpha=0):
+    losses = []
     loss_per_sentence = model.get_loss()
-    
-    for x_v, y_v in valid_text_iterator:
+    for x_v, y_v in text_iterator:
         if len(x_v[0][0]) != config.factors:
             logging.error('Mismatch between number of factors in settings ({0}), and number in validation corpus ({1})\n'.format(config.factors, len(x_v[0][0])))
             sys.exit(1)
-        x_v_in, x_v_mask_in, y_v_in, y_v_mask_in = prepare_data(x_v, y_v, maxlen=None)
-        feeds = {x:x_v_in, x_mask:x_v_mask_in, y:y_v_in, y_mask:y_v_mask_in, training:False}
+        x, x_mask, y, y_mask = util.prepare_data(x_v, y_v, config.factors,
+                                                 maxlen=None)
+        feeds = {model.inputs.x: x,
+                 model.inputs.x_mask: x_mask,
+                 model.inputs.y: y,
+                 model.inputs.y_mask: y_mask,
+                 model.inputs.training: False}
         loss_per_sentence_out = sess.run(loss_per_sentence, feed_dict=feeds)
 
         # normalize scores according to output length
@@ -505,15 +500,25 @@ def validate(config, sess, valid_text_iterator, model, normalization_alpha=0):
             adjusted_lengths = numpy.array([numpy.count_nonzero(s) ** normalization_alpha for s in y_v_mask_in.T])
             loss_per_sentence_out /= adjusted_lengths
 
-        total_loss += loss_per_sentence_out.sum()
-        total_seen += x_v_in.shape[2]
-        costs += list(loss_per_sentence_out)
-        logging.info( "Seen {0}".format(total_seen))
-    logging.info('Validation loss (AVG/SUM/N_SENT): {0} {1} {2}'.format(total_loss/total_seen, total_loss, total_seen))
-    return costs
+        losses += list(loss_per_sentence_out)
+        logging.info( "Seen {0}".format(len(losses)))
+    return losses
+
+
+def validate(config, sess, text_iterator, model, normalization_alpha=0):
+    losses = calc_loss_per_sentence(config, sess, text_iterator, model,
+                                    normalization_alpha)
+    num_sents = len(losses)
+    total_loss = sum(losses)
+    logging.info('Validation loss (AVG/SUM/N_SENT): {0} {1} {2}'.format(
+        total_loss/num_sents, total_loss, num_sents))
+    return losses
+
 
 def validate_helper(config, sess):
-    model, saver = create_model(config, sess)
+    logging.info('Building model...')
+    model = StandardModel(options)
+    saver = init_or_restore_variables(config, sess)
     valid_text_iterator = TextIterator(
                         source=config.valid_source_dataset,
                         target=config.valid_target_dataset,
@@ -553,21 +558,13 @@ def parse_args():
     data.add_argument('--model', '--saveto', type=str, default='model', metavar='PATH', dest='saveto',
                          help="model file name (default: %(default)s)")
     data.add_argument('--reload', type=str, default=None, metavar='PATH',
-                         help="load existing model from this path. Set to \"latest_checkpoint\" to reload the latest checkpoint in the same directory of --saveto")
+                         help="load existing model from this path. Set to \"latest_checkpoint\" to reload the latest checkpoint in the same directory of --model")
     data.add_argument('--no_reload_training_progress', action='store_false',  dest='reload_training_progress',
                          help="don't reload training progress (only used if --reload is enabled)")
     data.add_argument('--summary_dir', type=str, required=False, metavar='PATH', 
-                         help="directory for saving summaries (default: same directory as the --saveto file)")
+                         help="directory for saving summaries (default: same directory as the --model file)")
     data.add_argument('--summaryFreq', type=int, default=0, metavar='INT',
                          help="Save summaries after INT updates, if 0 do not save summaries (default: %(default)s)")
-    #egarzaj - Pretraining dictionary
-    data.add_argument('--pretrain_dictionary_src', type=str, metavar='PATH',
-                         help="Bilingual pretraining dictionary")
-    data.add_argument('--pretrain_dictionary_trg', type=str, metavar='PATH',
-                         help="Bilingual pretraining dictionary")
-    #egarzaj - Pretrain vocabularies
-    data.add_argument('--pretrain_vocabs', type=str, metavar='PATH', nargs="+",
-                         help="Bilingual pretraining dictionary")
 
     network = parser.add_argument_group('network parameters')
     network.add_argument('--embedding_size', '--dim_word', type=int, default=512, metavar='INT',
@@ -603,17 +600,21 @@ def parse_args():
                          help="dropout for input embeddings (0: no dropout) (default: %(default)s)")
     network.add_argument('--dropout_hidden', type=float, default=0.2, metavar="FLOAT",
                          help="dropout for hidden layer (0: no dropout) (default: %(default)s)")
-    network.add_argument('--dropout_source', type=float, default=0, metavar="FLOAT",
+    network.add_argument('--dropout_source', type=float, default=0.0, metavar="FLOAT",
                          help="dropout source words (0: no dropout) (default: %(default)s)")
-    network.add_argument('--dropout_target', type=float, default=0, metavar="FLOAT",
+    network.add_argument('--dropout_target', type=float, default=0.0, metavar="FLOAT",
                          help="dropout target words (0: no dropout) (default: %(default)s)")
     network.add_argument('--use_layer_norm', '--layer_normalisation', action="store_true", dest="use_layer_norm",
                          help="Set to use layer normalization in encoder and decoder")
+    network.add_argument('--tie_encoder_decoder_embeddings', action="store_true", dest="tie_encoder_decoder_embeddings",
+                         help="tie the input embeddings of the encoder and the decoder (first factor only). Source and target vocabulary size must be the same")
     network.add_argument('--tie_decoder_embeddings', action="store_true", dest="tie_decoder_embeddings",
                          help="tie the input embeddings of the decoder with the softmax output embeddings")
     network.add_argument('--output_hidden_activation', type=str, default='tanh',
                          choices=['tanh', 'relu', 'prelu', 'linear'],
                          help='activation function in hidden layer of the output network (default: %(default)s)')
+    network.add_argument('--softmax_mixture_size', type=int, default=1, metavar="INT",
+                         help="number of softmax components to use (default: %(default)s)")
 
     training = parser.add_argument_group('training parameters')
     training.add_argument('--maxlen', type=int, default=100, metavar='INT',
@@ -626,16 +627,18 @@ def parse_args():
                          help="maximum number of epochs (default: %(default)s)")
     training.add_argument('--finish_after', type=int, default=10000000, metavar='INT',
                          help="maximum number of updates (minibatches) (default: %(default)s)")
-    training.add_argument('--decay_c', type=float, default=0, metavar='FLOAT',
+    training.add_argument('--decay_c', type=float, default=0.0, metavar='FLOAT',
                          help="L2 regularization penalty (default: %(default)s)")
-    training.add_argument('--map_decay_c', type=float, default=0, metavar='FLOAT',
+    training.add_argument('--map_decay_c', type=float, default=0.0, metavar='FLOAT',
                          help="MAP-L2 regularization penalty towards original weights (default: %(default)s)")
     training.add_argument('--prior_model', type=str, metavar='PATH',
                          help="Prior model for MAP-L2 regularization. Unless using \"--reload\", this will also be used for initialization.")
-    training.add_argument('--clip_c', type=float, default=1, metavar='FLOAT',
+    training.add_argument('--clip_c', type=float, default=1.0, metavar='FLOAT',
                          help="gradient clipping threshold (default: %(default)s)")
     training.add_argument('--learning_rate', '--lrate', type=float, default=0.0001, metavar='FLOAT',
                          help="learning rate (default: %(default)s)")
+    training.add_argument('--label_smoothing', type=float, default=0.0, metavar='FLOAT',
+                         help="label smoothing (default: %(default)s)")
     training.add_argument('--no_shuffle', action="store_false", dest="shuffle_each_epoch",
                          help="disable shuffling of training data (for each epoch)")
     training.add_argument('--keep_train_set_in_memory', action="store_true", 
@@ -647,21 +650,8 @@ def parse_args():
     training.add_argument('--optimizer', type=str, default="adam",
                          choices=['adam'],
                          help="optimizer (default: %(default)s)")
-    #egarzaj - Add option lexical
     training.add_argument('--lexical', action='store_true',
                          help="Train using a lexical model")
-    #egarzaj - Add option fixnorm
-    training.add_argument('--fixnorm', action='store_true',
-                           help="Train fixing the norm of all target word embeddings to some value r")
-    #egarzaj - Add option fixnorma value
-    training.add_argument('--fixnorm_r_value', type=float, default=3.5, metavar='FLOAT',
-                          help="r value with which you want to fix the norm of the target word embeddings.")
-    #egarzaj - Pretraining option
-    training.add_argument('--bilingual_pretrain', action='store_true',
-                         help="Pre train using a bilingual dictionary provided with the --pretrain_dictionary option")
-    #egarzaj - Pretraining option
-    training.add_argument('--prevalidFreq', type=int, default=100,
-                           help="Pre train using a bilingual dictionary provided with the --pretrain_dictionary option")
                          
     validation = parser.add_argument_group('validation parameters')
     validation.add_argument('--valid_source_dataset', type=str, default=None, metavar='PATH', 
@@ -677,6 +667,8 @@ def parse_args():
                           help="validation minibatch size (expressed in number of source or target tokens). Sentence-level minibatch size will be dynamic. If this is enabled, valid_batch_size only affects sorting by length. (default: %(default)s)")
     validation.add_argument('--validFreq', type=int, default=10000, metavar='INT',
                          help="validation frequency (default: %(default)s)")
+    validation.add_argument('--valid_script', type=str, default=None, metavar='PATH',
+                         help="path to script for external validation (default: %(default)s). The script will be passed an argument specifying the path of a file that contains translations of the source validation corpus. It must write a single score to standard output.")
     validation.add_argument('--patience', type=int, default=10, metavar='INT',
                          help="early stopping patience (default: %(default)s)")
     validation.add_argument('--run_validation', action='store_true',
@@ -750,14 +742,12 @@ def parse_args():
         logging.error('\'--dictionaries\' must specify one dictionary per source factor and one target dictionary\n')
         sys.exit(1)
 
-    #egarzaj - Verify pre training bilingual dictionary is supplied if bilingual pre-train option is enabled
-    if config.bilingual_pretrain and (not config.pretrain_dictionary_src or not config.pretrain_dictionary_trg):
-        logging.error('If bilingual-pretrain is enabled you should supply a bilingual dictionary with --pretrain_dictionary_src and --pretrain_dictionary_trg')
-        sys.exit(1)
-    #egarzaj - Verify the r value is supplied if fixnorm is requested
-#    if config.fixnorm and (not config.pretrain_dictionary_src or not config.pretrain_dictionary_trg):
-#        logging.error('If fixnorm is enabled you should supply a value for r to which the target embeddings norm should be fixed with --fixnorm_r_value')
-#        sys.exit(1)
+    # determine target_embedding_size
+    if config.tie_encoder_decoder_embeddings:
+        config.target_embedding_size = config.dim_per_factor[0]
+    else:
+        config.target_embedding_size = config.embedding_size
+
     # set vocabulary sizes
     vocab_sizes = []
     if config.source_vocab_sizes == None:
@@ -780,64 +770,19 @@ def parse_args():
         if vocab_size >= 0:
             continue
         try:
-            d = load_dict(config.dictionaries[i])
+            d = util.load_dict(config.dictionaries[i])
         except:
             logging.error('failed to determine vocabulary size from file: {0}'.format(config.dictionaries[i]))
         vocab_sizes[i] = max(d.values()) + 1
-
-    #egarzaj - Config pretrain vocabularies
-    if config.bilingual_pretrain:
-        # set pre_vocab_sizes
-        pre_vocab_sizes = []
-        if config.source_vocab_sizes == None:
-            pre_vocab_sizes = [-1] * config.factors
-        elif len(config.source_vocab_sizes) == config.factors:
-            pre_vocab_sizes = config.source_vocab_sizes
-        elif len(config.source_vocab_sizes) < config.factors:
-            num_missing = config.factors - len(config.source_vocab_sizes)
-            pre_vocab_sizes += config.source_vocab_sizes + [-1] * num_missing
-        else:
-            logging.error('too many values supplied to \'--source_vocab_sizes\' option (expected one per factor = {0})'.format(config.factors))
-            sys.exit(1)
-        if config.target_vocab_size == -1:
-            pre_vocab_sizes.append(-1)
-        else:
-            pre_vocab_sizes.append(config.target_vocab_size)
-
-
-        # for unspecified vocabulary sizes, determine sizes from vocabulary dictionaries
-        for i, pre_vocab_size in enumerate(pre_vocab_sizes):
-            if pre_vocab_size >= 0:
-                continue
-            try:
-                d = load_dict(config.pretrain_vocabs[i])
-                logging.info("len "+`len(d)`+" "+`i`)
-            except:
-                logging.error('failed to determine vocabulary size from file: {0}'.format(config.pretrain_vocabs[i]))
-
-        #logging.info(pre_vocab_sizes)
-            a = max(d.values()) + 1
-            print("type "+`type(pre_vocab_sizes)`)
-            pre_vocab_sizes[i] = int(a)
-            logging.info(a)
-            
-            
-        #egarzaj- Pretrain
-        config.pre_source_dicts = config.pretrain_vocabs[:-1]
-        config.pre_source_vocab_sizes = pre_vocab_sizes[:-1]
-        config.pre_target_dict = config.pretrain_vocabs[-1]
-        #config.pre_target_vocab_size = pre_vocab_sizes[-1]
-
-
 
     config.source_dicts = config.dictionaries[:-1]
     config.source_vocab_sizes = vocab_sizes[:-1]
     config.target_dict = config.dictionaries[-1]
     config.target_vocab_size = vocab_sizes[-1]
 
-
     # set the model version
     config.model_version = 0.2
+    config.theano_compat = False
 
     return config
 
@@ -849,12 +794,16 @@ if __name__ == "__main__":
 
     config = parse_args()
     logging.info(config)
-    with tf.Session() as sess:
+    tf_config = tf.ConfigProto()
+    tf_config.allow_soft_placement = True
+    with tf.Session(config=tf_config) as sess:
         if config.translate_valid:
-            translate(config, sess)
+            logging.info('Building model...')
+            model = StandardModel(config)
+            saver = init_or_restore_variables(config, sess)
+            translate(sess, model, config)
         elif config.run_validation:
             validate_helper(config, sess)
         else:
             train(config, sess)
-        #egarzaj - needed to close the tf session.
         sess.close()
