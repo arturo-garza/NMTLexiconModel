@@ -202,8 +202,10 @@ class Decoder(object):
         def step_fn(prev, x):
             prev_state = prev[0]
             prev_att_ctx = prev[1]
+            prev_attention = prev[2]
             gates_x2d = x[0]
             proposal_x2d = x[1]
+            attent = x[2]
             state = self.grustep1.forward(
                         prev_state,
                         gates_x=gates_x2d,
