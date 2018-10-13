@@ -456,12 +456,12 @@ class LexicalModel(object):
     def __init__(self, config, batch_size, dropout_source, dropout_embedding,
                  dropout_hidden):
         self.config=config
-        with tf.name_scope("lexical_model"):
+        with tf.variable_scope("lexical_model"):
             self.lexical_model =  layers.FeedForwardLayer(in_size=config.embedding_size,
                                                    out_size=config.state_size,
                                                    batch_size=batch_size,
                                                    non_linearity=tf.nn.tanh)
-        with tf.name_scope("lexical_context_to_logits"):
+        with tf.variable_scope("lexical_context_to_logits"):
             self.lexical_to_logits = layers.FeedForwardLayer(
                                                       in_size=config.embedding_size,
                                                       out_size=config.target_vocab_size,
