@@ -537,7 +537,7 @@ class AttentionStep(object):
         scores = tf.exp(scores)
         scores *= self.context_mask
         scores = scores / tf.reduce_sum(scores, axis=0, keepdims=True)
-        attention_mtx = scores
+        attention_mtx = tf.expand_dims(scores, axis=2)
         attention_context = self.context * tf.expand_dims(scores, axis=2)
         attention_context = tf.reduce_sum(attention_context, axis=0, keepdims=False)
 
