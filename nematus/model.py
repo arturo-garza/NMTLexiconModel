@@ -544,7 +544,7 @@ class StandardModel(object):
                 if config.label_smoothing != 0.0:
                     rnn_uniform_prob = config.label_smoothing / tf.cast(tf.shape(self.logits)[-1], tf.float32)
                     rnn_smoothed_prob = 1.0 - config.label_smoothing + rnn_uniform_prob
-                    rnn_onehot_labels = tf.one_hot(self.y_true, tf.shape(self.logits)[-1], on_value=rnn_smoothed_prob,
+                    rnn_onehot_labels = tf.one_hot(self.inputs.y, tf.shape(self.logits)[-1], on_value=rnn_smoothed_prob,
                                                off_value=rnn_uniform_prob, dtype=tf.float32)
                     rnn_cost = tf.losses.softmax_cross_entropy(
                         onehot_labels=rnn_onehot_labels,
@@ -553,7 +553,7 @@ class StandardModel(object):
                         reduction=tf.losses.Reduction.NONE)
                     lex_uniform_prob = config.label_smoothing / tf.cast(tf.shape(self.lex_logits)[-1], tf.float32)
                     lex_smoothed_prob = 1.0 - config.label_smoothing + lex_uniform_prob
-                    lex_onehot_labels = tf.one_hot(self.y_true, tf.shape(self.lex_logits)[-1], on_value=lex_smoothed_prob,
+                    lex_onehot_labels = tf.one_hot(self.inputs.y, tf.shape(self.lex_logits)[-1], on_value=lex_smoothed_prob,
                                                    off_value=lex_uniform_prob, dtype=tf.float32)
                     lex_cost = tf.losses.softmax_cross_entropy(
                         onehot_labels=lex_onehot_labels,
