@@ -547,7 +547,7 @@ class StandardModel(object):
             if config.lexical:
                 if config.label_smoothing:
                     
-                    rnn_uniform_prob = self.smoothing_factor / tf.cast(tf.shape(logits)[-1], tf.float32)
+                    rnn_uniform_prob = self.smoothing_factor / tf.cast(tf.shape(self.logits)[-1], tf.float32)
                     rnn_smoothed_prob = 1.0-self.smoothing_factor + rnn_uniform_prob
                     rnn_onehot_labels = tf.one_hot(self.inputs.y, tf.shape(self.logits)[-1], on_value = rnn_smoothed_prob, off_value = rnn_uniform_prob, dtype = tf.float32)
                     rnn_cost = tf.losses.softmax_cross_entropy(
