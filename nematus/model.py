@@ -469,7 +469,7 @@ class LexicalModel(object):
                                                       dropout_input=dropout_hidden)
     
     def calc_c_embed(self, src_embs, scores):
-        c_embed = tf.multiply(src_embs, scores)
+        c_embed = tf.multiply(tf.expand_dims(scores, axis=2), src_embs)
         c_embed = tf.reduce_sum(c_embed, axis=0, keep_dims=False)
         c_embed = tf.tanh(c_embed)
         return c_embed
