@@ -521,7 +521,8 @@ class StandardModel(object):
         if config.lexical:
             logging.info('Lexical model enabled...')
             with tf.variable_scope("lexical"):
-                self.lexical_model = LexicalModel(config, batch_size, dropout_source, dropout_embedding, dropout_hidden)
+                self.lexical_model = LexicalModel(config, batch_size, dropout_source,
+                                                  dropout_embedding, dropout_hidden)
             with tf.variable_scope("decoder"):
                 if config.tie_encoder_decoder_embeddings:
                     tied_embeddings = self.encoder.emb_layer
@@ -546,24 +547,29 @@ class StandardModel(object):
         with tf.variable_scope("loss"):
             if config.lexical:
                 if config.label_smoothing:
-                    
                     rnn_uniform_prob = self.smoothing_factor / tf.cast(tf.shape(self.logits)[-1], tf.float32)
                     rnn_smoothed_prob = 1.0-self.smoothing_factor + rnn_uniform_prob
-                    rnn_onehot_labels = tf.one_hot(self.inputs.y, tf.shape(self.logits)[-1], on_value = rnn_smoothed_prob, off_value = rnn_uniform_prob, dtype = tf.float32)
+                    rnn_onehot_labels = tf.one_hot(self.inputs.y, tf.shape(self.logits)[-1],
+                                                   on_value = rnn_smoothed_prob,
+                                                   off_value = rnn_uniform_prob,
+                                                   dtype = tf.float32)
                     rnn_cost = tf.losses.softmax_cross_entropy(
                         onehot_labels=rnn_onehot_labels,
                         logits=self.logits,
                         weights=self.inputs.y_mask,
                         reduction=tf.losses.Reduction.NONE)
                     
-                    lex_uniform_prob = self.smoothing_factor / tf.cast(tf.shape(self.lex_logits)[-1], tf.float32)
-                    lex_smoothed_prob = 1.0-self.smoothing_factor + lex_uniform_prob
-                    lex_onehot_labels = tf.one_hot(self.inputs.y, tf.shape(self.lex_logits)[-1], on_value = lex_smoothed_prob, off_value = lex_uniform_prob, dtype = tf.float32)
-                    lex_cost = tf.losses.softmax_cross_entropy(
-                        onehot_labels=lex_onehot_labels,
-                        logits=self.lex_logits,
-                        weights=self.inputs.y_mask,
-                        reduction=tf.losses.Reduction.NONE)
+                    #lex_uniform_prob = self.smoothing_factor / tf.cast(tf.shape(self.lex_logits)[-1], tf.float32)
+                    #lex_smoothed_prob = 1.0-self.smoothing_factor + lex_uniform_prob
+                    #lex_onehot_labels = tf.one_hot(self.inputs.y, tf.shape(self.lex_logits)[-1],
+                    #                               on_value = lex_smoothed_prob,
+                    #                               off_value = lex_uniform_prob,
+                    #                                dtype = tf.float32)
+                    # lex_cost = tf.losses.softmax_cross_entropy(
+                    #     onehot_labels=lex_onehot_labels,
+                    #     logits=self.lex_logits,
+                    #     weights=self.inputs.y_mask,
+                    #     reduction=tf.losses.Reduction.NONE)
                 else:
                     rnn_cost = tf.losses.sparse_softmax_cross_entropy(
                         labels=self.inputs.y,
