@@ -549,7 +549,7 @@ class StandardModel(object):
                     rnn_cost = tf.losses.softmax_cross_entropy(
                         onehot_labels=rnn_onehot_labels,
                         logits=self.logits,
-                        weights=self.y_mask,
+                        weights=self.inputs.y_mask,
                         reduction=tf.losses.Reduction.NONE)
                     lex_uniform_prob = config.label_smoothing / tf.cast(tf.shape(self.lex_logits)[-1], tf.float32)
                     lex_smoothed_prob = 1.0 - config.label_smoothing + lex_uniform_prob
@@ -558,7 +558,7 @@ class StandardModel(object):
                     lex_cost = tf.losses.softmax_cross_entropy(
                         onehot_labels=lex_onehot_labels,
                         logits=self.lex_logits,
-                        weights=self.y_mask,
+                        weights=self.inputs.y_mask,
                         reduction=tf.losses.Reduction.NONE)
                 else:
                     rnn_cost = tf.losses.sparse_softmax_cross_entropy(
