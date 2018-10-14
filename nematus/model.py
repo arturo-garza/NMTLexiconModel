@@ -548,7 +548,7 @@ class StandardModel(object):
                 rnn_cost = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.inputs.y, logits=self.logits)
                 lex_cost = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.inputs.y, logits=self.lex_logits)
                 cost =rnn_cost + lex_cost
-                cost *= self.y_mask
+                cost *= self.inputs.y_mask
                 self.loss_per_sentence = tf.reduce_sum(cost, axis=0, keep_dims=False)
             else:
                 self.loss_layer = layers.Masked_cross_entropy_loss(
