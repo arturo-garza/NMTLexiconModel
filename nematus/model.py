@@ -571,18 +571,18 @@ class StandardModel(object):
                         weights=self.inputs.y_mask,
                         reduction=tf.losses.Reduction.NONE)
                 else:
-                    rnn_cost = tf.losses.sparse_softmax_cross_entropy(
-                        labels=self.inputs.y,
-                        logits=self.logits,
-                        weights=self.inputs.y_mask,
-                        reduction=tf.losses.Reduction.NONE)
-                    # lex_cost = tf.losses.sparse_softmax_cross_entropy(
-                    #     labels=self.inputs.y,
-                    #     logits=self.lex_logits,
-                    #     weights=self.inputs.y_mask,
-                    #     reduction=tf.losses.Reduction.NONE)
+                    #rnn_cost = tf.losses.sparse_softmax_cross_entropy(
+                    #    labels=self.inputs.y,
+                    #    logits=self.logits,
+                    #    weights=self.inputs.y_mask,
+                    #   reduction=tf.losses.Reduction.NONE)
+                    lex_cost = tf.losses.sparse_softmax_cross_entropy(
+                         labels=self.inputs.y,
+                         logits=self.lex_logits,
+                         weights=self.inputs.y_mask,
+                         reduction=tf.losses.Reduction.NONE)
                 
-                cost=rnn_cost#+lex_cost
+                cost=lex_cost#rnn_cost+lex_cost
                 self.loss_per_sentence = tf.reduce_sum(cost, axis=0, keep_dims=False)
             else:
                 self.loss_layer = layers.Masked_cross_entropy_loss(
