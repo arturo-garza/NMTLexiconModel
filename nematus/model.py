@@ -453,8 +453,7 @@ class ModelInputs(object):
             shape=())
 
 class LexicalModel(object):
-    def __init__(self, config, batch_size, dropout_source, dropout_embedding,
-                 dropout_hidden):
+    def __init__(self, config, batch_size, dropout_hidden):
         self.config=config
         with tf.variable_scope("lexical_model"):
             self.lexical_model =  layers.FeedForwardLayer(in_size=config.embedding_size,
@@ -521,8 +520,7 @@ class StandardModel(object):
         if config.lexical:
             logging.info('Lexical model enabled...')
             with tf.variable_scope("lexical"):
-                self.lexical_model = LexicalModel(config, batch_size, dropout_source,
-                                                  dropout_embedding, dropout_hidden)
+                self.lexical_model = LexicalModel(config, batch_size, dropout_hidden)
             with tf.variable_scope("decoder"):
                 if config.tie_encoder_decoder_embeddings:
                     tied_embeddings = self.encoder.emb_layer
@@ -546,6 +544,8 @@ class StandardModel(object):
 
         with tf.variable_scope("loss"):
             if config.lexical:
+                print(self.logits.get_shape())
+                print(self.lex_logits.get_shape())
                 if config.label_smoothing:
                     rnn_uniform_prob = self.smoothing_factor / tf.cast(tf.shape(self.logits)[-1], tf.float32)
                     rnn_smoothed_prob = 1.0-self.smoothing_factor + rnn_uniform_prob
@@ -578,7 +578,7 @@ class StandardModel(object):
                        reduction=tf.losses.Reduction.NONE)
                     lex_cost = tf.losses.sparse_softmax_cross_entropy(
                          labels=self.inputs.y,
-                         logits=self.logits,#lex_logits,
+                         logits=self.lex_logits,
                          weights=self.inputs.y_mask,
                          reduction=tf.losses.Reduction.NONE)
                 
