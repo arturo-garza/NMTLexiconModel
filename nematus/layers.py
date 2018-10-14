@@ -519,7 +519,7 @@ class AttentionStep(object):
             self.hidden_from_context = \
                 self.hidden_context_norm.forward(self.hidden_from_context)
 
-    def forward(self, prev_state):
+    def forward(self, prev_state, src_embs=None):
         prev_state = apply_dropout_mask(prev_state,
                                         self.dropout_mask_state_to_hidden)
         hidden_from_state = tf.matmul(prev_state, self.state_to_hidden)
@@ -537,11 +537,18 @@ class AttentionStep(object):
         scores = tf.exp(scores)
         scores *= self.context_mask
         scores = scores / tf.reduce_sum(scores, axis=0, keepdims=True)
-        attention_mtx = tf.expand_dims(scores, axis=2)
+
+        if src_embs is not None:
+            c_embed = tf.multiply(tf.expand_dims(scores, axis=2), src_embs)
+            c_embed = tf.reduce_sum(c_embed, axis=0, keep_dims=False)
+            c_embed = tf.tanh(c_embed)
+        else:
+            c_embed = scores
+
         attention_context = self.context * tf.expand_dims(scores, axis=2)
         attention_context = tf.reduce_sum(attention_context, axis=0, keepdims=False)
 
-        return attention_context, attention_mtx
+        return attention_context, c_embed
 
 class Masked_cross_entropy_loss(object):
     def __init__(self,

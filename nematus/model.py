@@ -147,9 +147,10 @@ class Decoder(object):
         def body(i, prev_base_state, prev_high_states, prev_y, prev_emb,
                  y_array):
             state1 = self.grustep1.forward(prev_base_state, prev_emb)
-            att_ctx, scores = self.attstep.forward(state1)
             if self.lexical:
-                c_embed = self.lexical_model.calc_c_embed(self.src_embs, scores)
+                att_ctx, c_embed = self.attstep.forward(state1, self.src_embs)
+            else:
+                att_ctx, c_embed = self.attstep.forward(state1)
             base_state = self.grustep2.forward(state1, att_ctx)
             if self.high_gru_stack == None:
                 output = base_state
@@ -194,8 +195,8 @@ class Decoder(object):
             y_embs = tf.pad(y_embs,
                             mode='CONSTANT',
                             paddings=[[1,0],[0,0],[0,0]]) # prepend zeros
-        attn_x = tf.placeholder(dtype=tf.float32, shape = (None, None, 1))
-        attention_out = tf.placeholder(dtype=tf.float32, shape = (None, None, 1))
+        attn_x = tf.placeholder(dtype=tf.float32, shape = (None, None))
+        attention_out = tf.placeholder(dtype=tf.float32, shape = (None, None))
         init_attended_context = tf.zeros([tf.shape(self.init_state)[0], self.state_size*2])
         init_state_att_ctx = (self.init_state, init_attended_context, attention_out)
         gates_x, proposal_x = self.grustep1.precompute_from_x(y_embs)
@@ -210,14 +211,17 @@ class Decoder(object):
                         prev_state,
                         gates_x=gates_x2d,
                         proposal_x=proposal_x2d)
-            att_ctx, scores = self.attstep.forward(state)
+            if self.lexical:
+                att_ctx, c_embed = self.attstep.forward(state, self.src_embs)
+            else:
+                att_ctx, c_embed = self.attstep.forward(state)
             state = self.grustep2.forward(state, att_ctx)
             #TODO: write att_ctx to tensorArray instead of having it as output of scan?
-            return (state, att_ctx, scores)
+            return (state, att_ctx, c_embed)
 
         layer = layers.RecurrentLayer(initial_state=init_state_att_ctx,
                                       step_fn=step_fn)
-        states, attended_states, scores = layer.forward((gates_x, proposal_x, attn_x))
+        states, attended_states, c_embed = layer.forward((gates_x, proposal_x, attn_x))
 
         if self.high_gru_stack != None:
             states = self.high_gru_stack.forward(
@@ -225,7 +229,6 @@ class Decoder(object):
                 context_layer=(attended_states if self.high_gru_stack.context_state_size > 0 else None))
 
         if self.lexical:
-            c_embed = self.lexical_model.calc_c_embed(self.src_embs, scores)
             logits, lex_logits = self.predictor.get_logits(y_embs, states, attended_states, c_embed, self.lexical_model, multi_step=True)
             return logits, lex_logits
         else:
@@ -468,11 +471,11 @@ class LexicalModel(object):
                                                       use_layer_norm=config.use_layer_norm,
                                                       dropout_input=dropout_hidden)
     
-    def calc_c_embed(self, src_embs, scores):
-        c_embed = tf.multiply(scores, src_embs)
-        c_embed = tf.reduce_sum(c_embed, axis=0, keep_dims=False)
-        c_embed = tf.tanh(c_embed)
-        return c_embed
+    # def calc_c_embed(self, src_embs, scores):
+    #     c_embed = tf.multiply(scores, src_embs)
+    #     c_embed = tf.reduce_sum(c_embed, axis=0, keep_dims=False)
+    #     c_embed = tf.tanh(c_embed)
+    #     return c_embed
 
 class StandardModel(object):
     def __init__(self, config):

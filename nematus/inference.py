@@ -86,7 +86,10 @@ def construct_beam_search_functions(models, beam_size):
         for j in range(len(models)):
             d = models[j].decoder
             states1 = d.grustep1.forward(prev_base_states[j], prev_embs[j])
-            att_ctx, scores = d.attstep.forward(states1)
+            if d.lexical:
+                att_ctx, c_embed = d.attstep.forward(states1, d.src_embs)
+            else:
+                att_ctx, c_embed = d.attstep.forward(states1)
             base_states[j] = d.grustep2.forward(states1, att_ctx)
             if d.high_gru_stack == None:
                 stack_output = base_states[j]
@@ -99,7 +102,6 @@ def construct_beam_search_functions(models, beam_size):
                     stack_output, high_states[j] = d.high_gru_stack.forward_single(
                         prev_high_states[j], base_states[j], context=att_ctx)
             if d.lexical:
-                c_embed = d.lexical_model.calc_c_embed(d.src_embs, scores)
                 logits, lex_logits = d.predictor.get_logits(prev_embs[j], stack_output,
                                                 att_ctx, c_embed, d.lexical_model,
                                                 multi_step=False)
