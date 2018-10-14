@@ -194,8 +194,8 @@ class Decoder(object):
             y_embs = tf.pad(y_embs,
                             mode='CONSTANT',
                             paddings=[[1,0],[0,0],[0,0]]) # prepend zeros
-        attn_x = tf.placeholder(dtype=tf.float32, shape = (None, None))#, 1))
-        attention_out = tf.placeholder(dtype=tf.float32, shape = (None, None))#, 1))
+        attn_x = tf.placeholder(dtype=tf.float32, shape = (None, None, 1))
+        attention_out = tf.placeholder(dtype=tf.float32, shape = (None, None, 1))
         init_attended_context = tf.zeros([tf.shape(self.init_state)[0], self.state_size*2])
         init_state_att_ctx = (self.init_state, init_attended_context, attention_out)
         gates_x, proposal_x = self.grustep1.precompute_from_x(y_embs)
