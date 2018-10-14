@@ -559,30 +559,30 @@ class StandardModel(object):
                         weights=self.inputs.y_mask,
                         reduction=tf.losses.Reduction.NONE)
                     
-                    #lex_uniform_prob = self.smoothing_factor / tf.cast(tf.shape(self.lex_logits)[-1], tf.float32)
-                    #lex_smoothed_prob = 1.0-self.smoothing_factor + lex_uniform_prob
-                    #lex_onehot_labels = tf.one_hot(self.inputs.y, tf.shape(self.lex_logits)[-1],
-                    #                               on_value = lex_smoothed_prob,
-                    #                               off_value = lex_uniform_prob,
-                    #                                dtype = tf.float32)
-                    # lex_cost = tf.losses.softmax_cross_entropy(
-                    #     onehot_labels=lex_onehot_labels,
-                    #     logits=self.lex_logits,
-                    #     weights=self.inputs.y_mask,
-                    #     reduction=tf.losses.Reduction.NONE)
+                    lex_uniform_prob = self.smoothing_factor / tf.cast(tf.shape(self.lex_logits)[-1], tf.float32)
+                    lex_smoothed_prob = 1.0-self.smoothing_factor + lex_uniform_prob
+                    lex_onehot_labels = tf.one_hot(self.inputs.y, tf.shape(self.lex_logits)[-1],
+                                                   on_value = lex_smoothed_prob,
+                                                   off_value = lex_uniform_prob,
+                                                   dtype = tf.float32)
+                    lex_cost = tf.losses.softmax_cross_entropy(
+                        onehot_labels=lex_onehot_labels,
+                        logits=self.lex_logits,
+                        weights=self.inputs.y_mask,
+                        reduction=tf.losses.Reduction.NONE)
                 else:
                     rnn_cost = tf.losses.sparse_softmax_cross_entropy(
                         labels=self.inputs.y,
                         logits=self.logits,
                         weights=self.inputs.y_mask,
                         reduction=tf.losses.Reduction.NONE)
-                    lex_cost = tf.losses.sparse_softmax_cross_entropy(
-                        labels=self.inputs.y,
-                        logits=self.lex_logits,
-                        weights=self.inputs.y_mask,
-                        reduction=tf.losses.Reduction.NONE)
+                    # lex_cost = tf.losses.sparse_softmax_cross_entropy(
+                    #     labels=self.inputs.y,
+                    #     logits=self.lex_logits,
+                    #     weights=self.inputs.y_mask,
+                    #     reduction=tf.losses.Reduction.NONE)
                 
-                cost=rnn_cost+lex_cost
+                cost=rnn_cost#+lex_cost
                 self.loss_per_sentence = tf.reduce_sum(cost, axis=0, keep_dims=False)
             else:
                 self.loss_layer = layers.Masked_cross_entropy_loss(
