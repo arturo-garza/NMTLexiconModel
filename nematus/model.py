@@ -470,12 +470,6 @@ class LexicalModel(object):
                                                       batch_size=batch_size,
                                                       use_layer_norm=config.use_layer_norm,
                                                       dropout_input=dropout_hidden)
-    
-    # def calc_c_embed(self, src_embs, scores):
-    #     c_embed = tf.multiply(scores, src_embs)
-    #     c_embed = tf.reduce_sum(c_embed, axis=0, keep_dims=False)
-    #     c_embed = tf.tanh(c_embed)
-    #     return c_embed
 
 class StandardModel(object):
     def __init__(self, config):
@@ -548,8 +542,16 @@ class StandardModel(object):
         with tf.variable_scope("loss"):
             if config.lexical:
                 #TODO: Enable label smoothing when using lexical model
-                rnn_cost = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.inputs.y, logits=self.logits)
-                lex_cost = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.inputs.y, logits=self.lex_logits)
+                rnn_cost = tf.losses.sparse_softmax_cross_entropy(
+                    labels=self.inputs.y,
+                    logits=self.logits,
+                    weights=self.inputs.y_mask,
+                    reduction=tf.losses.Reduction.NONE)
+                lex_cost = tf.losses.sparse_softmax_cross_entropy(
+                    labels=self.inputs.y,
+                    logits=self.lex_logits,
+                    weights=self.inputs.y_mask,
+                    reduction=tf.losses.Reduction.NONE)
                 cost =rnn_cost + lex_cost
                 cost *= self.inputs.y_mask
                 self.loss_per_sentence = tf.reduce_sum(cost, axis=0, keep_dims=False)
